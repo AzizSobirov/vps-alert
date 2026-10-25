@@ -14,6 +14,8 @@ One static binary, no open ports, no dashboard to host.
 
 📖 **[Documentation](docs/README.md)**: how alerts, backups, schedules, retention, databases and restores work.
 
+🇺🇿 **[Hujjatlar o'zbek tilida](docs/uz/README.md)**
+
 ## Installation
 
 This guide assumes an **Ubuntu 22.04+ or Debian 12+** server (Ubuntu 24.04 recommended) and that you

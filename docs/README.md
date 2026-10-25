@@ -1,5 +1,7 @@
 # vps-alert documentation
 
+🇺🇿 [O'zbekcha](uz/README.md)
+
 Start with the [installation guide](../README.md#installation) in the main README. These pages explain
 how each part works in more detail.
 
