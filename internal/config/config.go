@@ -21,6 +21,7 @@ type Config struct {
 	UserIDs    map[int64]bool // empty means every member of ChatID is trusted
 	ServerName string
 	DataDir    string
+	Language   string // default bot language; /lang overrides it
 
 	ResticBin      string
 	ResticPassword string
@@ -87,6 +88,11 @@ func Load() (*Config, error) {
 			continue
 		}
 		c.UserIDs[id] = true
+	}
+
+	c.Language = strings.ToLower(os.Getenv("LANGUAGE"))
+	if c.Language != "" && c.Language != "en" && c.Language != "uz" && c.Language != "ru" {
+		errs = append(errs, fmt.Errorf("LANGUAGE: must be en, uz or ru, got %q", c.Language))
 	}
 
 	if c.ServerName == "" {

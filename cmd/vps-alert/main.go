@@ -17,6 +17,7 @@ import (
 	"github.com/AzizSobirov/vps-alert/internal/backup"
 	"github.com/AzizSobirov/vps-alert/internal/bot"
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/loginhook"
 	"github.com/AzizSobirov/vps-alert/internal/monitor"
 	"github.com/AzizSobirov/vps-alert/internal/restore"
@@ -80,13 +81,17 @@ func main() {
 	case "restore":
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
-		bm := &backup.Manager{Cfg: cfg}
+		store, err := settings.Open(cfg.SettingsPath())
+		if err != nil {
+			log.Fatal(err)
+		}
+		bm := &backup.Manager{Cfg: cfg, Store: store}
 		if err := restore.Run(ctx, bm, &telegram.Notifier{TG: telegram.New(cfg.BotToken), ChatID: cfg.ChatID}); err != nil {
 			log.Fatal(err)
 		}
 	case "test":
 		_, err := telegram.New(cfg.BotToken).SendMessage(context.Background(), cfg.ChatID,
-			"✅ vps-alert test message from <b>"+html.EscapeString(cfg.ServerName)+"</b>", nil)
+			i18n.T(i18n.Pick(cfg.Language), "main.test", html.EscapeString(cfg.ServerName)), nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -132,11 +137,12 @@ func run(cfg *config.Config) error {
 		log.Printf("warning: backups unavailable: %v", err)
 	}
 
-	notify.Send(ctx, fmt.Sprintf("🟢 <b>vps-alert %s started</b> on %s", html.EscapeString(version), html.EscapeString(cfg.ServerName)))
+	notify.Send(ctx, i18n.T(i18n.Pick(store.Get().Language, cfg.Language), "main.started",
+		html.EscapeString(version), html.EscapeString(cfg.ServerName)))
 
 	tasks := []func(context.Context){
 		(&bot.Bot{Cfg: cfg, TG: tg, Store: store, Backup: backups}).Run,
-		(&monitor.Monitor{Server: cfg.ServerName, Store: store, Notify: notify}).Run,
+		(&monitor.Monitor{Server: cfg.ServerName, Store: store, Notify: notify, DefaultLang: cfg.Language}).Run,
 		backups.Schedule,
 	}
 	if cfg.HeartbeatURL != "" {

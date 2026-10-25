@@ -97,13 +97,14 @@ Use `vps-alert-linux-arm64` for ARM servers (`uname -m` prints `aarch64`).
 
 ### Step 4. Answer the installer
 
-The installer asks three questions:
+The installer asks four questions:
 
 | Question | Answer |
 |---|---|
 | Bot token | The token from step 1 |
 | Allowed chat ID | The chat ID from step 2 |
 | Allowed user IDs | Your user ID; for a group, a comma separated list like `123456789,987654321` |
+| Language | `en`, `uz` or `ru` for the bot's messages (can be changed later with `/lang`) |
 
 Then it:
 
@@ -227,6 +228,11 @@ them.
 | `/paths add /var/www`, `/paths rm /var/www` | Paths to back up |
 | `/schedule 1 03:00`, `/schedule off` | Back up every N days at HH:MM |
 | `/retention 7 4 6` | Snapshots to keep: daily, weekly, monthly |
+| `/lang`, `/lang uz` | Bot language: English, O'zbekcha or Русский |
+| `/help`, `/help schedule` | All commands, or one command explained with examples |
+
+Commands that need arguments, sent without them (for example a bare `/schedule`), show the current
+setting and examples instead of an error.
 
 ## Configuration
 

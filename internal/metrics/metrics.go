@@ -14,6 +14,8 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
+
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 )
 
 type Disk struct {
@@ -110,24 +112,24 @@ func Collect(ctx context.Context) (Snapshot, error) {
 	return s, nil
 }
 
-// Format renders the snapshot as a Telegram HTML message.
-func (s Snapshot) Format(server string) string {
+// Format renders the snapshot as a Telegram HTML message in l.
+func (s Snapshot) Format(l i18n.Lang, server string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "🖥 <b>%s</b>\n", html.EscapeString(server))
 	if s.OS != "" {
-		fmt.Fprintf(&b, "<i>%s</i>, uptime %s\n", html.EscapeString(s.OS), FormatDuration(s.Uptime))
+		b.WriteString(i18n.T(l, "metrics.os_uptime", html.EscapeString(s.OS), FormatDuration(s.Uptime)) + "\n")
 	}
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "%s CPU: <b>%.0f%%</b> (%d cores, load %.2f / %.2f / %.2f)\n",
-		dot(s.CPUPercent, 70, 90), s.CPUPercent, s.Cores, s.Load1, s.Load5, s.Load15)
-	fmt.Fprintf(&b, "%s RAM: <b>%.0f%%</b> (%s / %s)\n",
-		dot(s.MemPercent, 75, 90), s.MemPercent, Bytes(s.MemUsed), Bytes(s.MemTotal))
+	b.WriteString(i18n.T(l, "metrics.cpu",
+		dot(s.CPUPercent, 70, 90), s.CPUPercent, s.Cores, s.Load1, s.Load5, s.Load15) + "\n")
+	b.WriteString(i18n.T(l, "metrics.ram",
+		dot(s.MemPercent, 75, 90), s.MemPercent, Bytes(s.MemUsed), Bytes(s.MemTotal)) + "\n")
 	if s.SwapTotal > 0 {
-		fmt.Fprintf(&b, "   Swap: %s / %s\n", Bytes(s.SwapUsed), Bytes(s.SwapTotal))
+		b.WriteString(i18n.T(l, "metrics.swap", Bytes(s.SwapUsed), Bytes(s.SwapTotal)) + "\n")
 	}
 	for _, d := range s.Disks {
-		fmt.Fprintf(&b, "%s Disk <code>%s</code>: <b>%.0f%%</b> (%s / %s), inodes %.0f%%\n",
-			dot(d.Percent, 75, 85), html.EscapeString(d.Mount), d.Percent, Bytes(d.Used), Bytes(d.Total), d.InodePercent)
+		b.WriteString(i18n.T(l, "metrics.disk",
+			dot(d.Percent, 75, 85), html.EscapeString(d.Mount), d.Percent, Bytes(d.Used), Bytes(d.Total), d.InodePercent) + "\n")
 	}
 	return b.String()
 }

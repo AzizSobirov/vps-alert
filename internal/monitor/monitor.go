@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
@@ -20,10 +21,11 @@ import (
 const hysteresis = 5.0
 
 type Monitor struct {
-	Server   string
-	Store    *settings.Store
-	Notify   *telegram.Notifier
-	Interval time.Duration
+	Server      string
+	Store       *settings.Store
+	Notify      *telegram.Notifier
+	Interval    time.Duration
+	DefaultLang string // LANGUAGE from the env file; the /lang setting wins
 
 	states map[string]*state
 }
@@ -54,10 +56,11 @@ func (m *Monitor) Run(ctx context.Context) {
 		} else {
 			now := time.Now()
 			cfg := m.Store.Get()
-			if msgs := m.evaluate(snap, cfg.Alerts, now); len(msgs) > 0 && !now.Before(cfg.MutedUntil) {
+			l := i18n.Pick(cfg.Language, m.DefaultLang)
+			if msgs := m.evaluate(snap, cfg.Alerts, now, l); len(msgs) > 0 && !now.Before(cfg.MutedUntil) {
 				m.Notify.Send(ctx, fmt.Sprintf("🖥 <b>%s</b>\n\n%s", html.EscapeString(m.Server), strings.Join(msgs, "\n")))
 			}
-			m.maybeReport(ctx, snap, now)
+			m.maybeReport(ctx, snap, now, l)
 		}
 		select {
 		case <-ctx.Done():
@@ -67,23 +70,23 @@ func (m *Monitor) Run(ctx context.Context) {
 	}
 }
 
-func readings(s metrics.Snapshot, a settings.Alerts) []reading {
+func readings(s metrics.Snapshot, a settings.Alerts, l i18n.Lang) []reading {
 	r := []reading{
-		{"cpu", "CPU", s.CPUPercent, a.CPUPercent},
-		{"mem", "RAM", s.MemPercent, a.MemPercent},
+		{"cpu", i18n.T(l, "monitor.label.cpu"), s.CPUPercent, a.CPUPercent},
+		{"mem", i18n.T(l, "monitor.label.mem"), s.MemPercent, a.MemPercent},
 	}
 	for _, d := range s.Disks {
 		r = append(r,
-			reading{"disk:" + d.Mount, "Disk " + d.Mount, d.Percent, a.DiskPercent},
-			reading{"inode:" + d.Mount, "Inodes " + d.Mount, d.InodePercent, a.InodePercent},
+			reading{"disk:" + d.Mount, i18n.T(l, "monitor.label.disk", d.Mount), d.Percent, a.DiskPercent},
+			reading{"inode:" + d.Mount, i18n.T(l, "monitor.label.inode", d.Mount), d.InodePercent, a.InodePercent},
 		)
 	}
 	return r
 }
 
 // evaluate updates alert state with a new snapshot and returns the alert
-// lines that should be sent now.
-func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time) []string {
+// lines that should be sent now, in l.
+func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time, l i18n.Lang) []string {
 	if m.states == nil {
 		m.states = map[string]*state{}
 	}
@@ -91,7 +94,7 @@ func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time)
 	cooldown := time.Duration(a.CooldownMin) * time.Minute
 
 	var msgs []string
-	for _, r := range readings(s, a) {
+	for _, r := range readings(s, a, l) {
 		if r.threshold <= 0 {
 			continue
 		}
@@ -109,15 +112,15 @@ func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time)
 			}
 			if !st.firing && now.Sub(st.since) >= duration {
 				st.firing, st.lastSent = true, now
-				msgs = append(msgs, fmt.Sprintf("🔴 %s: <b>%.0f%%</b> (threshold %.0f%%)", label, r.value, r.threshold))
+				msgs = append(msgs, i18n.T(l, "monitor.fired", label, r.value, r.threshold))
 			} else if st.firing && now.Sub(st.lastSent) >= cooldown {
 				st.lastSent = now
-				msgs = append(msgs, fmt.Sprintf("🔴 %s still high: <b>%.0f%%</b> for %s",
+				msgs = append(msgs, i18n.T(l, "monitor.still_high",
 					label, r.value, metrics.FormatDuration(now.Sub(st.since))))
 			}
 		case r.value < r.threshold-hysteresis:
 			if st.firing {
-				msgs = append(msgs, fmt.Sprintf("✅ %s back to normal: %.0f%%", label, r.value))
+				msgs = append(msgs, i18n.T(l, "monitor.resolved", label, r.value))
 			}
 			*st = state{}
 		default:
@@ -131,7 +134,7 @@ func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time)
 	return msgs
 }
 
-func (m *Monitor) maybeReport(ctx context.Context, snap metrics.Snapshot, now time.Time) {
+func (m *Monitor) maybeReport(ctx context.Context, snap metrics.Snapshot, now time.Time, l i18n.Lang) {
 	cfg := m.Store.Get()
 	today := now.Format("2006-01-02")
 	if !cfg.Report.Enabled || cfg.Report.LastSent == today || now.Before(settings.At(now, cfg.Report.Time)) {
@@ -146,20 +149,20 @@ func (m *Monitor) maybeReport(ctx context.Context, snap metrics.Snapshot, now ti
 	}
 
 	var b strings.Builder
-	b.WriteString("📊 <b>Daily report</b>\n")
-	b.WriteString(snap.Format(m.Server))
+	b.WriteString(i18n.T(l, "monitor.report.title") + "\n")
+	b.WriteString(snap.Format(l, m.Server))
 	b.WriteString("\n")
 	bk := cfg.Backup
 	switch {
 	case bk.LastRun.IsZero():
-		b.WriteString("💾 Backup: never run")
+		b.WriteString(i18n.T(l, "monitor.report.backup_never"))
 	case bk.LastOK:
-		fmt.Fprintf(&b, "💾 Last backup: ✅ %s", bk.LastRun.Format("2006-01-02 15:04"))
+		b.WriteString(i18n.T(l, "monitor.report.backup_ok", bk.LastRun.Format("2006-01-02 15:04")))
 	default:
-		fmt.Fprintf(&b, "💾 Last backup: ❌ failed %s", bk.LastRun.Format("2006-01-02 15:04"))
+		b.WriteString(i18n.T(l, "monitor.report.backup_failed", bk.LastRun.Format("2006-01-02 15:04")))
 	}
 	if bk.Enabled {
-		fmt.Fprintf(&b, "\n⏭ Next backup: %s", bk.NextRun.Format("2006-01-02 15:04"))
+		b.WriteString("\n" + i18n.T(l, "monitor.report.next_backup", bk.NextRun.Format("2006-01-02 15:04")))
 	}
 	m.Notify.Send(ctx, b.String())
 }

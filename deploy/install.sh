@@ -55,7 +55,12 @@ if [ ! -f "$ENV_FILE" ]; then
 	ask "Bot token (from @BotFather): "; token=$REPLY
 	ask "Allowed chat ID: "; chat=$REPLY
 	ask "Allowed user IDs (comma separated, recommended): "; users=$REPLY
+	ask "Language (en/uz/ru) [en]: "; lang=${REPLY:-en}
 	[ -n "$token" ] && [ -n "$chat" ] || die "token and chat ID are required"
+	case "$lang" in
+		en | uz | ru) ;;
+		*) die "language must be en, uz or ru" ;;
+	esac
 	restic_pw=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 40)
 
 	install -d -m 700 /etc/vps-alert
@@ -65,6 +70,7 @@ BOT_TOKEN=$token
 ALLOWED_CHAT_ID=$chat
 ALLOWED_USER_IDS=$users
 SERVER_NAME=$(hostname)
+LANGUAGE=$lang
 RESTIC_PASSWORD=$restic_pw
 BACKUP_LOCAL_REPO=/var/backups/vps-alert
 BACKUP_PRE_COMMAND=

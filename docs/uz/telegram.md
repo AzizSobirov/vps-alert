@@ -62,6 +62,17 @@ sudo nano /etc/vps-alert/vps-alert.env
 sudo systemctl restart vps-alert
 ```
 
+## Til va yordam
+
+Bot inglizcha, o'zbekcha va ruscha gapiradi. `/lang` yuborib tilni tanlang yoki `/lang uz` deb
+yozing. Xabarlar, tugmalar va Telegram'dagi buyruqlar menyusi darhol almashadi. Yangi o'rnatish
+uchun standart tilni env faylda `LANGUAGE=uz` (yoki `en`, `ru`) bilan berish mumkin, `/lang` esa
+uning ustidan yozadi.
+
+`/help` barcha buyruqlarni misol bilan ko'rsatadi, `/help <buyruq>` (masalan `/help schedule`) esa
+bittasini batafsil va shu hujjatlarga havola bilan tushuntiradi. Argument talab qiladigan buyruq
+argumentsiz yuborilsa, joriy sozlama va misollar ko'rsatiladi.
+
 ## BotFather'da tavsiya etilgan sozlamalar
 
 - Botni guruhingizga qo'shgandan keyin `/setjoingroups` → **Disable** qiling, shunda begonalar uni

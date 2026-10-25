@@ -20,6 +20,7 @@ import (
 
 	"github.com/AzizSobirov/vps-alert/internal/backup"
 	"github.com/AzizSobirov/vps-alert/internal/dbdump"
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
@@ -113,7 +114,7 @@ func (r *restorer) files(ctx context.Context, target string, snap backup.Snapsho
 	dest := r.ask("Restore into directory", "/var/tmp/vps-alert-restore-"+time.Now().Format("20060102-150405"))
 
 	args := []string{"restore", snap.ShortID, "--target", dest}
-	what := "everything"
+	what := i18n.T(r.backup.Lang(), "restore.everything")
 	if i > 0 {
 		what = paths[i-1]
 		args = append(args, "--include", what)
@@ -130,7 +131,7 @@ func (r *restorer) files(ctx context.Context, target string, snap backup.Snapsho
 	fmt.Fprintf(r.out, "\n✅ Restored into %s\n", dest)
 	fmt.Fprintf(r.out, "Files keep their full path, e.g. %s. Nothing on the live system was overwritten; copy what you need into place.\n",
 		filepath.Join(dest, firstOr(paths, "/var/www")))
-	r.report(ctx, fmt.Sprintf("files (%s) from snapshot %s into %s", what, snap.ShortID, dest))
+	r.report(ctx, "restore.what.files", what, snap.ShortID, dest)
 	return nil
 }
 
@@ -237,7 +238,7 @@ func (r *restorer) database(ctx context.Context, target string, snap backup.Snap
 	if len(errLines) > 0 && strings.Contains(importErr.String(), "role") {
 		fmt.Fprintln(r.out, "Missing roles: create the database users first, then restore again.")
 	}
-	r.report(ctx, fmt.Sprintf("database %s from snapshot %s into %s", entry.DB.Label(), snap.ShortID, dst.Label()))
+	r.report(ctx, "restore.what.database", entry.DB.Label(), snap.ShortID, dst.Label())
 	return ierr
 }
 
@@ -263,13 +264,13 @@ func (r *restorer) saveDump(ctx context.Context, target string, snap backup.Snap
 		return fmt.Errorf("restic dump: %v: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	fmt.Fprintf(r.out, "\n✅ Saved %s\n", dest)
-	r.report(ctx, fmt.Sprintf("dump %s from snapshot %s to %s", path.Base(file), snap.ShortID, dest))
+	r.report(ctx, "restore.what.dump", path.Base(file), snap.ShortID, dest)
 	return nil
 }
 
 // report tells the chat that a restore happened: restoring data is a
 // notable event even when it is legitimate.
-func (r *restorer) report(ctx context.Context, what string) {
+func (r *restorer) report(ctx context.Context, key string, args ...any) {
 	if r.notify == nil {
 		return
 	}
@@ -279,8 +280,9 @@ func (r *restorer) report(ctx context.Context, what string) {
 	if user == "" {
 		user = os.Getenv("USER")
 	}
-	r.notify.Send(ctx, fmt.Sprintf("♻️ <b>Restore</b> on %s by %s\n%s",
-		html.EscapeString(r.backup.Cfg.ServerName), html.EscapeString(user), html.EscapeString(what)))
+	l := r.backup.Lang()
+	r.notify.Send(ctx, i18n.T(l, "restore.report",
+		html.EscapeString(r.backup.Cfg.ServerName), html.EscapeString(user), html.EscapeString(i18n.T(l, key, args...))))
 }
 
 func (r *restorer) resticOutput(ctx context.Context, target string, args ...string) ([]byte, error) {

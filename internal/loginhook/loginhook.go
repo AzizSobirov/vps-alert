@@ -6,7 +6,7 @@ package loginhook
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"html"
 	"net"
 	"os"
@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
+	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
 
@@ -75,11 +77,12 @@ func Notify(cfg *config.Config, ev Event) error {
 	if ev.Host != "" && Whitelisted(ev.Host, cfg.LoginWhitelist) {
 		return nil
 	}
+	l := i18n.Pick(savedLanguage(cfg.SettingsPath()), cfg.Language)
 	from := ev.Host
 	if from == "" {
-		from = "local"
+		from = i18n.T(l, "login.local")
 	}
-	text := fmt.Sprintf("🔐 <b>Login</b> on %s\n\n👤 User: <b>%s</b>\n🌐 From: <code>%s</code>\n🔧 Service: %s\n🕓 %s",
+	text := i18n.T(l, "login.alert",
 		html.EscapeString(cfg.ServerName), html.EscapeString(ev.User), html.EscapeString(from),
 		html.EscapeString(ev.Service), time.Now().Format("2006-01-02 15:04:05 MST"))
 
@@ -87,4 +90,18 @@ func Notify(cfg *config.Config, ev Event) error {
 	defer cancel()
 	_, err := telegram.New(cfg.BotToken).SendMessage(ctx, cfg.ChatID, text, nil)
 	return err
+}
+
+// savedLanguage reads the language chosen with /lang. It only reads the
+// settings file: the PAM hook must never create files.
+func savedLanguage(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var s settings.Settings
+	if json.Unmarshal(data, &s) != nil {
+		return ""
+	}
+	return s.Language
 }

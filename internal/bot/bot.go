@@ -18,6 +18,7 @@ import (
 	"github.com/AzizSobirov/vps-alert/internal/backup"
 	"github.com/AzizSobirov/vps-alert/internal/config"
 	"github.com/AzizSobirov/vps-alert/internal/dbdump"
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
@@ -26,6 +27,8 @@ import (
 // Commands queued while the agent was offline are dropped if older than this,
 // so a "backup now" from yesterday does not run on restart.
 const maxCommandAge = 5 * time.Minute
+
+const dateTime = "2006-01-02 15:04"
 
 type Bot struct {
 	Cfg    *config.Config
@@ -44,19 +47,46 @@ type Bot struct {
 	reported map[int64]time.Time // unauthorized users already reported
 }
 
-var commands = []telegram.BotCommand{
-	{Command: "status", Description: "Server status"},
-	{Command: "backup", Description: "Backup menu"},
-	{Command: "db", Description: "Databases to back up"},
-	{Command: "paths", Description: "Backup paths: /paths add|rm /path"},
-	{Command: "schedule", Description: "Backup schedule: /schedule <days> <HH:MM> | off"},
-	{Command: "retention", Description: "Keep snapshots: /retention <daily> <weekly> <monthly>"},
-	{Command: "alerts", Description: "Alert thresholds: /alerts cpu 90"},
-	{Command: "report", Description: "Daily report time: /report 09:00 | off"},
-	{Command: "mute", Description: "Mute alerts: /mute 1h"},
-	{Command: "unmute", Description: "Unmute alerts"},
-	{Command: "help", Description: "Help"},
+// command describes a bot command for /help and the Telegram command menu.
+// Its texts are the i18n keys "help.<name>.short" and "help.<name>".
+type command struct {
+	name    string
+	group   string // help section: monitor, backup or bot
+	example string
+	doc     string // page under docs/
 }
+
+var commands = []command{
+	{"status", "monitor", "/status", "alerts.md"},
+	{"alerts", "monitor", "/alerts cpu 90", "alerts.md"},
+	{"mute", "monitor", "/mute 2h", "alerts.md"},
+	{"unmute", "monitor", "/unmute", "alerts.md"},
+	{"report", "monitor", "/report 09:00", "alerts.md"},
+	{"backup", "backup", "/backup", "backups.md"},
+	{"db", "backup", "/db", "databases.md"},
+	{"paths", "backup", "/paths add /var/www", "backups.md"},
+	{"schedule", "backup", "/schedule 1 03:00", "schedule-and-retention.md"},
+	{"retention", "backup", "/retention 7 4 6", "schedule-and-retention.md"},
+	{"lang", "bot", "/lang uz", "telegram.md"},
+	{"help", "bot", "/help schedule", "telegram.md"},
+}
+
+func lookupCommand(name string) (command, bool) {
+	for _, c := range commands {
+		if c.name == name {
+			return c, true
+		}
+	}
+	return command{}, false
+}
+
+// usageError marks an error caused by wrong arguments; the command's help is
+// shown after it.
+type usageError struct{ error }
+
+func (e usageError) Unwrap() error { return e.error }
+
+func usage(err error) error { return usageError{err} }
 
 func (b *Bot) Run(ctx context.Context) {
 	for {
@@ -70,7 +100,7 @@ func (b *Bot) Run(ctx context.Context) {
 			return
 		}
 	}
-	if err := b.TG.SetMyCommands(ctx, commands); err != nil {
+	if err := b.TG.SetMyCommands(ctx, botCommands(b.language())); err != nil {
 		log.Printf("bot: setMyCommands: %v", err)
 	}
 	log.Printf("bot: polling as @%s", b.username)
@@ -100,6 +130,20 @@ func (b *Bot) Run(ctx context.Context) {
 	}
 }
 
+// language is the bot's current language: the /lang setting, else LANGUAGE
+// from the env file, else English.
+func (b *Bot) language() i18n.Lang {
+	return i18n.Pick(b.Store.Get().Language, b.Cfg.Language)
+}
+
+func botCommands(l i18n.Lang) []telegram.BotCommand {
+	var cmds []telegram.BotCommand
+	for _, c := range commands {
+		cmds = append(cmds, telegram.BotCommand{Command: c.name, Description: i18n.T(l, "help."+c.name+".short")})
+	}
+	return cmds
+}
+
 func (b *Bot) handle(ctx context.Context, u telegram.Update) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -112,7 +156,7 @@ func (b *Bot) handle(ctx context.Context, u telegram.Update) {
 		// Leaving a chat produces an update too; only react to being added.
 		m := u.MyChatMember
 		if status := m.NewChatMember.Status; m.Chat.ID != b.Cfg.ChatID && status != "left" && status != "kicked" {
-			b.reject(ctx, m.Chat, m.From, "added the bot to a chat")
+			b.reject(ctx, m.Chat, m.From, i18n.T(b.language(), "bot.unauthorized.added"))
 		}
 	case u.Message != nil:
 		m := u.Message
@@ -135,7 +179,7 @@ func (b *Bot) handle(ctx context.Context, u telegram.Update) {
 	case u.CallbackQuery != nil:
 		q := u.CallbackQuery
 		if q.Message == nil || !b.allowed(q.Message.Chat.ID, q.From.ID) {
-			b.TG.AnswerCallback(ctx, q.ID, "Not allowed")
+			b.TG.AnswerCallback(ctx, q.ID, i18n.T(b.language(), "bot.not_allowed"))
 			if q.Message != nil {
 				b.reject(ctx, q.Message.Chat, q.From, "button "+q.Data)
 			}
@@ -180,7 +224,7 @@ func (b *Bot) reject(ctx context.Context, chat telegram.Chat, from telegram.User
 	if len(what) > 100 {
 		what = what[:100] + "…"
 	}
-	b.reply(ctx, fmt.Sprintf("⚠️ <b>Unauthorized access attempt</b>\nUser: %s (<code>%d</code>)\nChat: <code>%d</code> (%s)\nAction: <code>%s</code>",
+	b.reply(ctx, i18n.T(b.language(), "bot.unauthorized",
 		html.EscapeString(displayName(from)), from.ID, chat.ID, html.EscapeString(chat.Type), html.EscapeString(what)), nil)
 }
 
@@ -202,99 +246,109 @@ func parseCommand(text, username string) (string, []string, bool) {
 }
 
 func (b *Bot) command(ctx context.Context, from *telegram.User, cmd string, args []string) {
+	l := b.language()
 	var err error
 	switch cmd {
-	case "start", "help":
-		b.reply(ctx, helpText, nil)
+	case "start":
+		b.reply(ctx, helpList(l), nil)
+	case "help":
+		err = b.help(ctx, l, args)
 	case "status":
-		b.status(ctx)
+		b.status(ctx, l)
 	case "backup":
 		b.backupMenu(ctx, 0)
 	case "db":
-		m, err := b.TG.SendMessage(ctx, b.Cfg.ChatID, "🔍 Scanning for databases…", nil)
+		m, err := b.TG.SendMessage(ctx, b.Cfg.ChatID, i18n.T(l, "bot.db.scanning"), nil)
 		if err == nil {
 			b.scanDatabases(ctx)
 			b.showDatabases(ctx, m.MessageID)
 		}
 	case "paths":
-		err = b.paths(ctx, args)
+		err = b.paths(ctx, l, args)
 	case "schedule":
-		err = b.schedule(ctx, args)
+		err = b.schedule(ctx, l, args)
 	case "retention":
-		err = b.retention(ctx, args)
+		err = b.retention(ctx, l, args)
 	case "alerts":
-		err = b.alerts(ctx, args)
+		err = b.alerts(ctx, l, args)
 	case "report":
-		err = b.report(ctx, args)
+		err = b.report(ctx, l, args)
 	case "mute":
-		err = b.mute(ctx, args)
+		err = b.mute(ctx, l, args)
 	case "unmute":
 		err = b.Store.Update(func(s *settings.Settings) error { s.MutedUntil = time.Time{}; return nil })
 		if err == nil {
-			b.reply(ctx, "🔔 Alerts unmuted", nil)
+			b.reply(ctx, i18n.T(l, "bot.unmuted"), nil)
 		}
+	case "lang":
+		err = b.lang(ctx, l, args)
 	default:
-		b.reply(ctx, "Unknown command. /help", nil)
+		b.reply(ctx, i18n.T(l, "bot.unknown"), nil)
 	}
 	if err != nil {
-		b.reply(ctx, "⚠️ "+html.EscapeString(err.Error()), nil)
+		msg := "⚠️ " + html.EscapeString(i18n.Text(l, err))
+		if errors.As(err, new(usageError)) {
+			msg += "\n\n" + commandHelp(l, cmd)
+		}
+		b.reply(ctx, msg, nil)
 	}
 }
 
 func (b *Bot) callback(ctx context.Context, q *telegram.CallbackQuery) {
+	l := b.language()
 	msgID := q.Message.MessageID
 	action, arg, _ := strings.Cut(q.Data, ":")
 	switch action {
 	case "now":
 		if b.Backup.Running() {
-			b.TG.AnswerCallback(ctx, q.ID, "A backup is already running")
+			b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.backup.already_running"))
 			return
 		}
-		b.TG.AnswerCallback(ctx, q.ID, "Backup started")
-		b.reply(ctx, "⏳ Backup started…", nil)
-		reason := "manual, " + displayName(q.From)
+		b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.backup.started_toast"))
+		b.reply(ctx, i18n.T(l, "bot.backup.started"), nil)
+		reason := i18n.T(l, "bot.backup.reason_manual", displayName(q.From))
 		go func() {
 			if err := b.Backup.Run(ctx, reason); errors.Is(err, backup.ErrRunning) {
-				b.reply(ctx, "⚠️ A backup is already running", nil)
+				b.reply(ctx, "⚠️ "+i18n.T(l, "bot.backup.already_running"), nil)
 			}
 		}()
 	case "snapshots":
 		b.TG.AnswerCallback(ctx, q.ID, "")
-		b.snapshots(ctx)
+		b.snapshots(ctx, l)
 	case "target":
 		if arg == "" {
 			b.TG.AnswerCallback(ctx, q.ID, "")
-			b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, "🎯 <b>Where should backups go?</b>", &telegram.Keyboard{
+			b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, i18n.T(l, "bot.target.title"), &telegram.Keyboard{
 				InlineKeyboard: [][]telegram.Button{{
-					{Text: "💽 Local", CallbackData: "target:local"},
-					{Text: "☁️ R2", CallbackData: "target:r2"},
-					{Text: "Both", CallbackData: "target:both"},
-				}, {{Text: "« Back", CallbackData: "menu"}}},
+					{Text: i18n.T(l, "bot.target.local"), CallbackData: "target:local"},
+					{Text: i18n.T(l, "bot.target.r2"), CallbackData: "target:r2"},
+					{Text: i18n.T(l, "bot.target.both"), CallbackData: "target:both"},
+				}, {{Text: i18n.T(l, "bot.btn.back"), CallbackData: "menu"}}},
 			})
 			return
 		}
 		if arg != "local" && !b.Cfg.R2Enabled() {
-			b.TG.AnswerCallback(ctx, q.ID, "R2 is not configured in the env file")
+			b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.target.r2_missing"))
 			return
 		}
-		b.update(ctx, q, func(s *settings.Settings) error { s.Backup.Target = arg; return nil })
+		b.update(ctx, l, q, func(s *settings.Settings) error { s.Backup.Target = arg; return nil })
 		b.backupMenu(ctx, msgID)
 	case "every":
 		if arg == "" {
 			b.TG.AnswerCallback(ctx, q.ID, "")
-			b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, "📅 <b>How often?</b>\nFor a custom time use /schedule &lt;days&gt; &lt;HH:MM&gt;", &telegram.Keyboard{
+			b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, i18n.T(l, "bot.every.title"), &telegram.Keyboard{
 				InlineKeyboard: [][]telegram.Button{{
-					{Text: "Daily", CallbackData: "every:1"},
-					{Text: "Every 3 days", CallbackData: "every:3"},
-					{Text: "Weekly", CallbackData: "every:7"},
+					{Text: i18n.T(l, "bot.every.daily"), CallbackData: "every:1"},
+					{Text: i18n.T(l, "bot.every.3days"), CallbackData: "every:3"},
+					{Text: i18n.T(l, "bot.every.weekly"), CallbackData: "every:7"},
 				}, {
-					{Text: "⏸ Off", CallbackData: "every:off"},
-					{Text: "« Back", CallbackData: "menu"},
+					{Text: i18n.T(l, "bot.every.off"), CallbackData: "every:off"},
+					{Text: i18n.T(l, "bot.btn.back"), CallbackData: "menu"},
 				}},
 			})
 			return
 		}
-		b.update(ctx, q, func(s *settings.Settings) error {
+		b.update(ctx, l, q, func(s *settings.Settings) error {
 			if arg == "off" {
 				s.Backup.Enabled = false
 				return nil
@@ -306,20 +360,20 @@ func (b *Bot) callback(ctx context.Context, q *telegram.CallbackQuery) {
 		})
 		b.backupMenu(ctx, msgID)
 	case "dbscan":
-		b.TG.AnswerCallback(ctx, q.ID, "Scanning…")
-		b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, "🔍 Scanning for databases…", nil)
+		b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.db.scanning_toast"))
+		b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, i18n.T(l, "bot.db.scanning"), nil)
 		b.scanDatabases(ctx)
 		b.showDatabases(ctx, msgID)
 	case "db":
 		i, err := strconv.Atoi(arg)
 		if err != nil || i < 0 || i >= len(b.found) {
-			b.TG.AnswerCallback(ctx, q.ID, "List is outdated, scanning again")
+			b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.db.outdated"))
 			b.scanDatabases(ctx)
 			b.showDatabases(ctx, msgID)
 			return
 		}
 		db := b.found[i]
-		b.update(ctx, q, func(s *settings.Settings) error {
+		b.update(ctx, l, q, func(s *settings.Settings) error {
 			if idx := indexOf(s.Backup.Databases, db); idx >= 0 {
 				s.Backup.Databases = append(s.Backup.Databases[:idx], s.Backup.Databases[idx+1:]...)
 			} else {
@@ -328,6 +382,17 @@ func (b *Bot) callback(ctx context.Context, q *telegram.CallbackQuery) {
 			return nil
 		})
 		b.showDatabases(ctx, msgID)
+	case "lang":
+		next, ok := i18n.Parse(arg)
+		if !ok {
+			b.TG.AnswerCallback(ctx, q.ID, "")
+			return
+		}
+		if err := b.setLanguage(ctx, next); err != nil {
+			b.TG.AnswerCallback(ctx, q.ID, i18n.Text(l, err))
+			return
+		}
+		b.TG.AnswerCallback(ctx, q.ID, i18n.T(next, "bot.saved"))
 	case "menu":
 		b.TG.AnswerCallback(ctx, q.ID, "")
 		b.backupMenu(ctx, msgID)
@@ -336,79 +401,80 @@ func (b *Bot) callback(ctx context.Context, q *telegram.CallbackQuery) {
 	}
 }
 
-func (b *Bot) update(ctx context.Context, q *telegram.CallbackQuery, fn func(*settings.Settings) error) {
+func (b *Bot) update(ctx context.Context, l i18n.Lang, q *telegram.CallbackQuery, fn func(*settings.Settings) error) {
 	if err := b.Store.Update(fn); err != nil {
-		b.TG.AnswerCallback(ctx, q.ID, err.Error())
+		b.TG.AnswerCallback(ctx, q.ID, i18n.Text(l, err))
 		return
 	}
-	b.TG.AnswerCallback(ctx, q.ID, "Saved")
+	b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.saved"))
 }
 
-func (b *Bot) status(ctx context.Context) {
+func (b *Bot) status(ctx context.Context, l i18n.Lang) {
 	snap, err := metrics.Collect(ctx)
 	if err != nil {
 		b.reply(ctx, "⚠️ "+html.EscapeString(err.Error()), nil)
 		return
 	}
-	text := snap.Format(b.Cfg.ServerName)
+	text := snap.Format(l, b.Cfg.ServerName)
 	s := b.Store.Get()
 	if time.Now().Before(s.MutedUntil) {
-		text += fmt.Sprintf("\n🔕 Alerts muted until %s", s.MutedUntil.Format("2006-01-02 15:04"))
+		text += "\n" + i18n.T(l, "bot.status.muted", s.MutedUntil.Format(dateTime))
 	}
 	if b.Backup.Running() {
-		text += "\n⏳ Backup in progress"
+		text += "\n" + i18n.T(l, "bot.status.backup_running")
 	}
 	b.reply(ctx, text, nil)
 }
 
 // backupMenu sends the backup overview, or edits message msgID in place.
 func (b *Bot) backupMenu(ctx context.Context, msgID int64) {
+	l := b.language()
 	s := b.Store.Get().Backup
 	var t strings.Builder
-	t.WriteString("💾 <b>Backup</b>\n\n")
+	t.WriteString(i18n.T(l, "bot.backup.title") + "\n\n")
 	if s.Enabled {
-		fmt.Fprintf(&t, "📅 Every %d day(s) at %s\n⏭ Next: %s\n", s.IntervalDays, s.Time, s.NextRun.Format("2006-01-02 15:04"))
+		t.WriteString(i18n.T(l, "bot.backup.schedule_on", s.IntervalDays, s.Time, s.NextRun.Format(dateTime)) + "\n")
 	} else {
-		t.WriteString("📅 Schedule: off\n")
+		t.WriteString(i18n.T(l, "bot.backup.schedule_off") + "\n")
 	}
-	fmt.Fprintf(&t, "🎯 Target: %s\n", s.Target)
-	fmt.Fprintf(&t, "🗂 Keep: %d daily, %d weekly, %d monthly\n", s.KeepDaily, s.KeepWeekly, s.KeepMonthly)
+	t.WriteString(i18n.T(l, "bot.backup.target", i18n.T(l, "bot.target."+s.Target)) + "\n")
+	t.WriteString(i18n.T(l, "bot.backup.keep", s.KeepDaily, s.KeepWeekly, s.KeepMonthly) + "\n")
 	if len(s.Paths) == 0 {
-		t.WriteString("📁 Paths: <i>none, add with /paths add /var/www</i>\n")
+		t.WriteString(i18n.T(l, "bot.backup.paths_none") + "\n")
 	} else {
-		t.WriteString("📁 Paths:\n")
+		t.WriteString(i18n.T(l, "bot.backup.paths") + "\n")
 		for _, p := range s.Paths {
 			fmt.Fprintf(&t, "  • <code>%s</code>\n", html.EscapeString(p))
 		}
 	}
 	if len(s.Databases) == 0 {
-		t.WriteString("🗄 Databases: <i>none, choose with /db</i>\n")
+		t.WriteString(i18n.T(l, "bot.backup.dbs_none") + "\n")
 	} else {
-		t.WriteString("🗄 Databases:\n")
+		t.WriteString(i18n.T(l, "bot.backup.dbs") + "\n")
 		for _, d := range s.Databases {
 			fmt.Fprintf(&t, "  • %s\n", html.EscapeString(d.Label()))
 		}
 	}
 	switch {
 	case s.LastRun.IsZero():
-		t.WriteString("🕓 Last run: never\n")
+		t.WriteString(i18n.T(l, "bot.backup.last_never") + "\n")
 	case s.LastOK:
-		fmt.Fprintf(&t, "🕓 Last run: ✅ %s\n", s.LastRun.Format("2006-01-02 15:04"))
+		t.WriteString(i18n.T(l, "bot.backup.last_ok", s.LastRun.Format(dateTime)) + "\n")
 	default:
-		fmt.Fprintf(&t, "🕓 Last run: ❌ %s\n", s.LastRun.Format("2006-01-02 15:04"))
+		t.WriteString(i18n.T(l, "bot.backup.last_failed", s.LastRun.Format(dateTime)) + "\n")
 	}
 	if err := b.Backup.Available(); err != nil {
-		fmt.Fprintf(&t, "\n⚠️ %s\n", html.EscapeString(err.Error()))
+		fmt.Fprintf(&t, "\n⚠️ %s\n", html.EscapeString(i18n.Text(l, err)))
 	}
 
 	kb := &telegram.Keyboard{InlineKeyboard: [][]telegram.Button{{
-		{Text: "▶️ Backup now", CallbackData: "now"},
-		{Text: "📋 Snapshots", CallbackData: "snapshots"},
+		{Text: i18n.T(l, "bot.btn.backup_now"), CallbackData: "now"},
+		{Text: i18n.T(l, "bot.btn.snapshots"), CallbackData: "snapshots"},
 	}, {
-		{Text: "🎯 Target", CallbackData: "target"},
-		{Text: "📅 Schedule", CallbackData: "every"},
+		{Text: i18n.T(l, "bot.btn.target"), CallbackData: "target"},
+		{Text: i18n.T(l, "bot.btn.schedule"), CallbackData: "every"},
 	}, {
-		{Text: "🗄 Databases", CallbackData: "dbscan"},
+		{Text: i18n.T(l, "bot.btn.databases"), CallbackData: "dbscan"},
 	}}}
 	if msgID != 0 {
 		if err := b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, t.String(), kb); err == nil {
@@ -439,13 +505,14 @@ func (b *Bot) scanDatabases(ctx context.Context) {
 }
 
 func (b *Bot) showDatabases(ctx context.Context, msgID int64) {
+	l := b.language()
 	selected := b.Store.Get().Backup.Databases
 	var t strings.Builder
-	t.WriteString("🗄 <b>Databases</b>\n")
+	t.WriteString(i18n.T(l, "bot.db.title") + "\n")
 	if len(b.found) == 0 {
-		t.WriteString("\nNo databases found. Supported: PostgreSQL and MySQL/MariaDB, on the host or in Docker.\n")
+		t.WriteString("\n" + i18n.T(l, "bot.db.none") + "\n")
 	} else {
-		t.WriteString("Tap to include or exclude from backups. Each one is dumped to its own file.\n")
+		t.WriteString(i18n.T(l, "bot.db.hint") + "\n")
 	}
 	for _, w := range b.scanWarnings {
 		fmt.Fprintf(&t, "\n⚠️ <code>%s</code>", html.EscapeString(w))
@@ -459,13 +526,13 @@ func (b *Bot) showDatabases(ctx context.Context, msgID int64) {
 		}
 		label := mark + " " + db.Label()
 		if b.missing[db] {
-			label += " (not found)"
+			label += " " + i18n.T(l, "bot.db.not_found")
 		}
 		rows = append(rows, []telegram.Button{{Text: label, CallbackData: "db:" + strconv.Itoa(i)}})
 	}
 	rows = append(rows, []telegram.Button{
-		{Text: "🔄 Rescan", CallbackData: "dbscan"},
-		{Text: "« Back", CallbackData: "menu"},
+		{Text: i18n.T(l, "bot.btn.rescan"), CallbackData: "dbscan"},
+		{Text: i18n.T(l, "bot.btn.back"), CallbackData: "menu"},
 	})
 	kb := &telegram.Keyboard{InlineKeyboard: rows}
 	if err := b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, t.String(), kb); err != nil {
@@ -482,40 +549,40 @@ func indexOf(dbs []settings.Database, db settings.Database) int {
 	return -1
 }
 
-func (b *Bot) snapshots(ctx context.Context) {
+func (b *Bot) snapshots(ctx context.Context, l i18n.Lang) {
 	var t strings.Builder
-	t.WriteString("📋 <b>Recent snapshots</b>\n")
+	t.WriteString(i18n.T(l, "bot.snapshots.title") + "\n")
 	for _, target := range backup.Targets(b.Store.Get().Backup.Target) {
-		fmt.Fprintf(&t, "\n<b>%s</b>\n", target)
+		fmt.Fprintf(&t, "\n<b>%s</b>\n", i18n.T(l, "bot.target."+target))
 		snaps, err := b.Backup.Snapshots(ctx, target, 10)
 		switch {
 		case err != nil:
-			fmt.Fprintf(&t, "⚠️ <code>%s</code>\n", html.EscapeString(err.Error()))
+			fmt.Fprintf(&t, "⚠️ <code>%s</code>\n", html.EscapeString(i18n.Text(l, err)))
 		case len(snaps) == 0:
-			t.WriteString("<i>no snapshots yet</i>\n")
+			t.WriteString(i18n.T(l, "bot.snapshots.none") + "\n")
 		}
 		for _, s := range snaps {
 			size := ""
 			if s.Summary != nil {
 				size = ", " + metrics.Bytes(s.Summary.TotalBytesProcessed)
 			}
-			fmt.Fprintf(&t, "<code>%s</code> %s%s\n", s.ShortID, s.Time.Local().Format("2006-01-02 15:04"), size)
+			fmt.Fprintf(&t, "<code>%s</code> %s%s\n", s.ShortID, s.Time.Local().Format(dateTime), size)
 		}
 	}
 	b.reply(ctx, t.String(), nil)
 }
 
-func (b *Bot) paths(ctx context.Context, args []string) error {
+func (b *Bot) paths(ctx context.Context, l i18n.Lang, args []string) error {
 	if len(args) == 0 {
-		b.backupMenu(ctx, 0)
+		b.showHelp(ctx, l, "paths")
 		return nil
 	}
 	if len(args) != 2 || (args[0] != "add" && args[0] != "rm") {
-		return errors.New("usage: /paths add /path or /paths rm /path")
+		return usage(i18n.Err("bot.err.usage"))
 	}
 	p := filepath.Clean(args[1])
 	if !filepath.IsAbs(p) {
-		return errors.New("path must be absolute")
+		return usage(i18n.Err("bot.err.path_absolute"))
 	}
 	err := b.Store.Update(func(s *settings.Settings) error {
 		idx := -1
@@ -526,16 +593,16 @@ func (b *Bot) paths(ctx context.Context, args []string) error {
 		}
 		if args[0] == "rm" {
 			if idx < 0 {
-				return fmt.Errorf("%s is not in the list", p)
+				return i18n.Err("bot.err.path_not_listed", p)
 			}
 			s.Backup.Paths = append(s.Backup.Paths[:idx], s.Backup.Paths[idx+1:]...)
 			return nil
 		}
 		if idx >= 0 {
-			return fmt.Errorf("%s is already in the list", p)
+			return i18n.Err("bot.err.path_listed", p)
 		}
 		if _, err := os.Stat(p); err != nil {
-			return fmt.Errorf("%s does not exist on the server", p)
+			return i18n.Err("bot.err.path_missing", p)
 		}
 		s.Backup.Paths = append(s.Backup.Paths, p)
 		return nil
@@ -543,32 +610,36 @@ func (b *Bot) paths(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	b.reply(ctx, "✅ Saved", nil)
+	b.reply(ctx, i18n.T(l, "bot.saved_msg"), nil)
 	b.backupMenu(ctx, 0)
 	return nil
 }
 
-func (b *Bot) schedule(ctx context.Context, args []string) error {
+func (b *Bot) schedule(ctx context.Context, l i18n.Lang, args []string) error {
+	if len(args) == 0 {
+		b.showHelp(ctx, l, "schedule")
+		return nil
+	}
 	var msg string
 	err := b.Store.Update(func(s *settings.Settings) error {
 		if len(args) == 1 && args[0] == "off" {
 			s.Backup.Enabled = false
-			msg = "⏸ Scheduled backups turned off"
+			msg = i18n.T(l, "bot.schedule.off")
 			return nil
 		}
 		if len(args) != 2 {
-			return errors.New("usage: /schedule <days> <HH:MM>, e.g. /schedule 1 03:00, or /schedule off")
+			return usage(i18n.Err("bot.err.usage"))
 		}
 		days, err := strconv.Atoi(args[0])
 		if err != nil || days < 1 || days > 365 {
-			return errors.New("days must be between 1 and 365")
+			return usage(i18n.Err("bot.err.days"))
 		}
 		if _, _, err := settings.ParseClock(args[1]); err != nil {
-			return err
+			return usage(i18n.Err("bot.err.clock", args[1]))
 		}
 		s.Backup.Enabled, s.Backup.IntervalDays, s.Backup.Time = true, days, args[1]
 		s.Backup.NextRun = settings.NextOccurrence(time.Now(), args[1])
-		msg = fmt.Sprintf("✅ Backup every %d day(s) at %s. Next: %s", days, args[1], s.Backup.NextRun.Format("2006-01-02 15:04"))
+		msg = i18n.T(l, "bot.schedule.saved", days, args[1], s.Backup.NextRun.Format(dateTime))
 		return nil
 	})
 	if err == nil {
@@ -577,49 +648,51 @@ func (b *Bot) schedule(ctx context.Context, args []string) error {
 	return err
 }
 
-func (b *Bot) retention(ctx context.Context, args []string) error {
+func (b *Bot) retention(ctx context.Context, l i18n.Lang, args []string) error {
+	if len(args) == 0 {
+		b.showHelp(ctx, l, "retention")
+		return nil
+	}
 	if len(args) != 3 {
-		return errors.New("usage: /retention <daily> <weekly> <monthly>, e.g. /retention 7 4 6")
+		return usage(i18n.Err("bot.err.usage"))
 	}
 	var n [3]int
 	for i, a := range args {
 		v, err := strconv.Atoi(a)
 		if err != nil || v < 0 || v > 1000 {
-			return fmt.Errorf("invalid number %q", a)
+			return usage(i18n.Err("bot.err.number", a))
 		}
 		n[i] = v
 	}
 	if n[0]+n[1]+n[2] == 0 {
-		return errors.New("keep at least one snapshot")
+		return usage(i18n.Err("bot.err.keep_one"))
 	}
 	err := b.Store.Update(func(s *settings.Settings) error {
 		s.Backup.KeepDaily, s.Backup.KeepWeekly, s.Backup.KeepMonthly = n[0], n[1], n[2]
 		return nil
 	})
 	if err == nil {
-		b.reply(ctx, fmt.Sprintf("✅ Keeping %d daily, %d weekly, %d monthly snapshots", n[0], n[1], n[2]), nil)
+		b.reply(ctx, i18n.T(l, "bot.retention.saved", n[0], n[1], n[2]), nil)
 	}
 	return err
 }
 
-func (b *Bot) alerts(ctx context.Context, args []string) error {
+func (b *Bot) alerts(ctx context.Context, l i18n.Lang, args []string) error {
 	if len(args) == 0 {
-		a := b.Store.Get().Alerts
-		b.reply(ctx, fmt.Sprintf("🚨 <b>Alert thresholds</b>\n\nCPU: %s\nRAM: %s\nDisk: %s\nInodes: %s\nMust last: %d min\nRepeat every: %d min\n\nChange: <code>/alerts cpu 90</code> (0 disables)\nKeys: cpu, mem, disk, inode, duration, cooldown",
-			pct(a.CPUPercent), pct(a.MemPercent), pct(a.DiskPercent), pct(a.InodePercent), a.DurationMin, a.CooldownMin), nil)
+		b.showHelp(ctx, l, "alerts")
 		return nil
 	}
 	if len(args) != 2 {
-		return errors.New("usage: /alerts <key> <value>, e.g. /alerts disk 85")
+		return usage(i18n.Err("bot.err.usage"))
 	}
 	v, err := strconv.Atoi(args[1])
 	if err != nil {
-		return fmt.Errorf("invalid number %q", args[1])
+		return usage(i18n.Err("bot.err.number", args[1]))
 	}
 	err = b.Store.Update(func(s *settings.Settings) error {
 		a := &s.Alerts
 		if pctKey := map[string]bool{"cpu": true, "mem": true, "disk": true, "inode": true}[args[0]]; pctKey && (v < 0 || v > 100) {
-			return errors.New("percent must be between 0 and 100")
+			return usage(i18n.Err("bot.err.percent"))
 		}
 		switch args[0] {
 		case "cpu":
@@ -632,45 +705,49 @@ func (b *Bot) alerts(ctx context.Context, args []string) error {
 			a.InodePercent = float64(v)
 		case "duration":
 			if v < 0 || v > 1440 {
-				return errors.New("duration must be between 0 and 1440 minutes")
+				return usage(i18n.Err("bot.err.duration"))
 			}
 			a.DurationMin = v
 		case "cooldown":
 			if v < 1 || v > 1440 {
-				return errors.New("cooldown must be between 1 and 1440 minutes")
+				return usage(i18n.Err("bot.err.cooldown"))
 			}
 			a.CooldownMin = v
 		default:
-			return fmt.Errorf("unknown key %q", args[0])
+			return usage(i18n.Err("bot.err.alert_key", args[0]))
 		}
 		return nil
 	})
 	if err == nil {
-		b.reply(ctx, "✅ Saved", nil)
+		b.reply(ctx, i18n.T(l, "bot.saved_msg"), nil)
 	}
 	return err
 }
 
-func (b *Bot) report(ctx context.Context, args []string) error {
+func (b *Bot) report(ctx context.Context, l i18n.Lang, args []string) error {
+	if len(args) == 0 {
+		b.showHelp(ctx, l, "report")
+		return nil
+	}
 	if len(args) != 1 {
-		return errors.New("usage: /report 09:00 or /report off")
+		return usage(i18n.Err("bot.err.usage"))
 	}
 	var msg string
 	err := b.Store.Update(func(s *settings.Settings) error {
 		if args[0] == "off" {
 			s.Report.Enabled = false
-			msg = "⏸ Daily report turned off"
+			msg = i18n.T(l, "bot.report.off")
 			return nil
 		}
 		if _, _, err := settings.ParseClock(args[0]); err != nil {
-			return err
+			return usage(i18n.Err("bot.err.clock", args[0]))
 		}
 		s.Report.Enabled, s.Report.Time = true, args[0]
 		// Do not send a second report today just because the time moved.
 		if !time.Now().Before(settings.At(time.Now(), args[0])) {
 			s.Report.LastSent = time.Now().Format("2006-01-02")
 		}
-		msg = "✅ Daily report at " + args[0]
+		msg = i18n.T(l, "bot.report.saved", args[0])
 		return nil
 	})
 	if err == nil {
@@ -679,20 +756,143 @@ func (b *Bot) report(ctx context.Context, args []string) error {
 	return err
 }
 
-func (b *Bot) mute(ctx context.Context, args []string) error {
+func (b *Bot) mute(ctx context.Context, l i18n.Lang, args []string) error {
+	if len(args) == 0 {
+		b.showHelp(ctx, l, "mute")
+		return nil
+	}
 	if len(args) != 1 {
-		return errors.New("usage: /mute 30m, /mute 2h or /mute 1d")
+		return usage(i18n.Err("bot.err.usage"))
 	}
 	d, err := parseDuration(args[0])
 	if err != nil || d <= 0 || d > 7*24*time.Hour {
-		return errors.New("duration must be between 1m and 7d, e.g. 30m, 2h, 1d")
+		return usage(i18n.Err("bot.err.mute_duration"))
 	}
 	until := time.Now().Add(d)
 	if err := b.Store.Update(func(s *settings.Settings) error { s.MutedUntil = until; return nil }); err != nil {
 		return err
 	}
-	b.reply(ctx, "🔕 Alerts muted until "+until.Format("2006-01-02 15:04"), nil)
+	b.reply(ctx, i18n.T(l, "bot.mute.saved", until.Format(dateTime)), nil)
 	return nil
+}
+
+func (b *Bot) lang(ctx context.Context, l i18n.Lang, args []string) error {
+	if len(args) == 0 {
+		var row []telegram.Button
+		for _, x := range i18n.Langs {
+			row = append(row, telegram.Button{Text: x.Label(), CallbackData: "lang:" + string(x)})
+		}
+		b.reply(ctx, i18n.T(l, "bot.lang.choose"), &telegram.Keyboard{InlineKeyboard: [][]telegram.Button{row}})
+		return nil
+	}
+	next, ok := i18n.Parse(args[0])
+	if !ok || len(args) != 1 {
+		return usage(i18n.Err("bot.err.lang", args[0]))
+	}
+	return b.setLanguage(ctx, next)
+}
+
+// setLanguage saves the language, translates the Telegram command menu and
+// confirms in the new language.
+func (b *Bot) setLanguage(ctx context.Context, l i18n.Lang) error {
+	if err := b.Store.Update(func(s *settings.Settings) error { s.Language = string(l); return nil }); err != nil {
+		return err
+	}
+	if err := b.TG.SetMyCommands(ctx, botCommands(l)); err != nil {
+		log.Printf("bot: setMyCommands: %v", err)
+	}
+	b.reply(ctx, i18n.T(l, "bot.lang.saved"), nil)
+	return nil
+}
+
+func (b *Bot) help(ctx context.Context, l i18n.Lang, args []string) error {
+	if len(args) == 0 {
+		b.reply(ctx, helpList(l), nil)
+		return nil
+	}
+	name := strings.ToLower(strings.TrimPrefix(args[0], "/"))
+	if _, ok := lookupCommand(name); !ok {
+		return usage(i18n.Err("bot.help.unknown", args[0]))
+	}
+	b.showHelp(ctx, l, name)
+	return nil
+}
+
+// showHelp sends a command's current state, if it has one, followed by its
+// detailed help.
+func (b *Bot) showHelp(ctx context.Context, l i18n.Lang, name string) {
+	text := commandHelp(l, name)
+	if state := b.state(l, name); state != "" {
+		text = state + "\n\n" + text
+	}
+	b.reply(ctx, text, nil)
+}
+
+// state describes the current setting a command changes.
+func (b *Bot) state(l i18n.Lang, name string) string {
+	s := b.Store.Get()
+	switch name {
+	case "schedule":
+		line := i18n.T(l, "bot.state.schedule_off")
+		if s.Backup.Enabled {
+			line = i18n.T(l, "bot.state.schedule_on", s.Backup.IntervalDays, s.Backup.Time, s.Backup.NextRun.Format(dateTime))
+		}
+		return line + "\n" + i18n.T(l, "bot.state.clock", time.Now().Format("15:04 MST"))
+	case "retention":
+		return i18n.T(l, "bot.state.retention", s.Backup.KeepDaily, s.Backup.KeepWeekly, s.Backup.KeepMonthly)
+	case "report":
+		if !s.Report.Enabled {
+			return i18n.T(l, "bot.state.report_off")
+		}
+		return i18n.T(l, "bot.state.report_on", s.Report.Time)
+	case "mute":
+		if time.Now().Before(s.MutedUntil) {
+			return i18n.T(l, "bot.state.muted", s.MutedUntil.Format(dateTime))
+		}
+		return i18n.T(l, "bot.state.unmuted")
+	case "paths":
+		if len(s.Backup.Paths) == 0 {
+			return i18n.T(l, "bot.state.paths_none")
+		}
+		var t strings.Builder
+		t.WriteString(i18n.T(l, "bot.state.paths"))
+		for _, p := range s.Backup.Paths {
+			fmt.Fprintf(&t, "\n  • <code>%s</code>", html.EscapeString(p))
+		}
+		return t.String()
+	case "alerts":
+		a := s.Alerts
+		return i18n.T(l, "bot.state.alerts", pct(l, a.CPUPercent), pct(l, a.MemPercent), pct(l, a.DiskPercent),
+			pct(l, a.InodePercent), a.DurationMin, a.CooldownMin)
+	}
+	return ""
+}
+
+// commandHelp is the detailed help for one command: what it does, usage,
+// examples and a link to the documentation.
+func commandHelp(l i18n.Lang, name string) string {
+	c, _ := lookupCommand(name)
+	return fmt.Sprintf("<b>/%s</b>: %s\n\n%s\n\n%s", name, html.EscapeString(i18n.T(l, "help."+name+".short")),
+		i18n.T(l, "help."+name), i18n.T(l, "bot.help.more", i18n.DocURL(l, c.doc)))
+}
+
+// helpList lists every command with a one-line description and an example.
+func helpList(l i18n.Lang) string {
+	var t strings.Builder
+	t.WriteString(i18n.T(l, "bot.help.title") + "\n")
+	group := ""
+	for _, c := range commands {
+		if c.group != group {
+			group = c.group
+			fmt.Fprintf(&t, "\n%s\n", i18n.T(l, "bot.help.group."+group))
+		}
+		fmt.Fprintf(&t, "/%s: %s\n", c.name, html.EscapeString(i18n.T(l, "help."+c.name+".short")))
+		if c.example != "/"+c.name {
+			fmt.Fprintf(&t, "    <code>%s</code>\n", html.EscapeString(c.example))
+		}
+	}
+	t.WriteString("\n" + i18n.T(l, "bot.help.footer"))
+	return t.String()
 }
 
 func (b *Bot) reply(ctx context.Context, text string, kb *telegram.Keyboard) {
@@ -709,9 +909,9 @@ func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-func pct(v float64) string {
+func pct(l i18n.Lang, v float64) string {
 	if v <= 0 {
-		return "off"
+		return i18n.T(l, "bot.off")
 	}
 	return fmt.Sprintf("%.0f%%", v)
 }
@@ -731,19 +931,3 @@ func sleep(ctx context.Context, d time.Duration) bool {
 		return true
 	}
 }
-
-const helpText = `🛡 <b>vps-alert</b>: server monitoring and backups
-
-<b>Status</b>
-/status: CPU, RAM, disk, uptime
-/alerts: show or change thresholds
-/mute 1h, /unmute: silence alerts
-/report 09:00: daily report time
-
-<b>Backup</b>
-/backup: menu (run now, snapshots, target, schedule)
-/db: find databases and choose which to back up
-/paths add /var/www: add a path
-/paths rm /var/www: remove a path
-/schedule 1 03:00: every N days at HH:MM
-/retention 7 4 6: snapshots to keep (daily, weekly, monthly)`

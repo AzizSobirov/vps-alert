@@ -1,0 +1,55 @@
+package i18n
+
+func init() {
+	register(UZ, map[string]string{
+		"metrics.os_uptime": "<i>%s</i>, ishlash vaqti %s",
+		"metrics.cpu":       "%s CPU: <b>%.0f%%</b> (%d yadro, yuklama %.2f / %.2f / %.2f)",
+		"metrics.ram":       "%s RAM: <b>%.0f%%</b> (%s / %s)",
+		"metrics.swap":      "   Swap: %s / %s",
+		"metrics.disk":      "%s Disk <code>%s</code>: <b>%.0f%%</b> (%s / %s), inode %.0f%%",
+
+		"monitor.label.cpu":   "CPU",
+		"monitor.label.mem":   "RAM",
+		"monitor.label.disk":  "Disk %s",
+		"monitor.label.inode": "Inode %s",
+		"monitor.fired":       "🔴 %s: <b>%.0f%%</b> (chegara %.0f%%)",
+		"monitor.still_high":  "🔴 %s hali ham yuqori: <b>%.0f%%</b>, %s davomida",
+		"monitor.resolved":    "✅ %s normal holatga qaytdi: %.0f%%",
+
+		"monitor.report.title":         "📊 <b>Kunlik hisobot</b>",
+		"monitor.report.backup_never":  "💾 Backup: hali olinmagan",
+		"monitor.report.backup_ok":     "💾 Oxirgi backup: ✅ %s",
+		"monitor.report.backup_failed": "💾 Oxirgi backup: ❌ muvaffaqiyatsiz %s",
+		"monitor.report.next_backup":   "⏭ Keyingi backup: %s",
+
+		"backup.finished":         "✅ <b>Backup tugadi</b>",
+		"backup.failed":           "❌ <b>Backup muvaffaqiyatsiz</b>",
+		"backup.reason.scheduled": "jadval bo'yicha",
+		"backup.dumps_summary":    "🗄 Bazalar: %d/%d ta dump qilindi",
+		"backup.target_ok":        "✅ <b>%s</b>: snapshot <code>%s</code>, +%s yangi, jami %s, %d ta yangi fayl",
+		"backup.warn.incomplete":  "ba'zi fayllarni o'qib bo'lmadi",
+		"backup.warn.forget":      "eski snapshot'larni tozalab bo'lmadi: %s",
+
+		"backup.err.running":          "backup allaqachon ishlayapti",
+		"backup.err.no_restic":        "restic o'rnatilmagan (apt install restic)",
+		"backup.err.no_password":      "env faylda RESTIC_PASSWORD berilmagan",
+		"backup.err.nothing":          "backup qiladigan narsa yo'q: /paths add /papka bilan papka yoki /db bilan baza qo'shing",
+		"backup.err.pre_command":      "backupdan oldingi buyruq xato berdi: %s",
+		"backup.err.manifest":         "bazalar ro'yxatini yozib bo'lmadi: %s",
+		"backup.err.all_dumps_failed": "birorta ham baza dump qilinmadi",
+		"backup.err.no_r2":            "R2 sozlanmagan (env faylda R2_* qiymatlarini kiriting)",
+		"backup.err.low_space":        "%[2]s da faqat %[1]s bo'sh joy qolgan",
+
+		"login.alert": "🔐 <b>Kirish</b>: %s\n\n👤 Foydalanuvchi: <b>%s</b>\n🌐 Qayerdan: <code>%s</code>\n🔧 Servis: %s\n🕓 %s",
+		"login.local": "lokal",
+
+		"restore.report":        "♻️ <b>Restore</b>: %s, bajardi: %s\n%s",
+		"restore.everything":    "hammasi",
+		"restore.what.files":    "fayllar (%s), snapshot %s → %s",
+		"restore.what.database": "baza %s, snapshot %s → %s",
+		"restore.what.dump":     "dump %s, snapshot %s → %s",
+
+		"main.started": "🟢 <b>vps-alert %s ishga tushdi</b>: %s",
+		"main.test":    "✅ vps-alert test xabari: <b>%s</b>",
+	})
+}

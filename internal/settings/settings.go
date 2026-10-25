@@ -17,6 +17,7 @@ type Settings struct {
 	Report     Report    `json:"report"`
 	Backup     Backup    `json:"backup"`
 	MutedUntil time.Time `json:"muted_until"`
+	Language   string    `json:"language,omitempty"` // set with /lang; empty means LANGUAGE from env
 }
 
 type Alerts struct {

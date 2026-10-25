@@ -58,6 +58,16 @@ sudo nano /etc/vps-alert/vps-alert.env
 sudo systemctl restart vps-alert
 ```
 
+## Language and help
+
+The bot speaks English, Uzbek and Russian. Send `/lang` and tap a language, or `/lang uz`. Messages,
+buttons and the Telegram command menu switch at once. The default for a fresh install can be set
+with `LANGUAGE=uz` (or `en`, `ru`) in the env file; `/lang` overrides it.
+
+`/help` lists every command with an example, and `/help <command>` (e.g. `/help schedule`) explains
+one in detail with a link to these docs. A command that needs arguments, sent without them, shows
+its current setting and examples.
+
 ## Recommended BotFather settings
 
 - `/setjoingroups` → **Disable** after adding the bot to your group, so strangers cannot add it to

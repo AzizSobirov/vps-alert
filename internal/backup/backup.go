@@ -23,12 +23,13 @@ import (
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
 	"github.com/AzizSobirov/vps-alert/internal/dbdump"
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
 
-var ErrRunning = errors.New("a backup is already running")
+var ErrRunning = i18n.Err("backup.err.running")
 
 // Refuse to write a local backup when less than this much space is free.
 const minFreeBytes = 1 << 30
@@ -53,7 +54,7 @@ type Result struct {
 	FilesNew   int
 	DataAdded  uint64
 	TotalBytes uint64
-	Warning    string
+	Warnings   []error
 	Err        error
 }
 
@@ -69,15 +70,23 @@ type Snapshot struct {
 // Available reports why backups cannot run, or nil if they can.
 func (m *Manager) Available() error {
 	if _, err := exec.LookPath(m.Cfg.ResticBin); err != nil {
-		return errors.New("restic is not installed (apt install restic)")
+		return i18n.Err("backup.err.no_restic")
 	}
 	if m.Cfg.ResticPassword == "" {
-		return errors.New("RESTIC_PASSWORD is not set in the env file")
+		return i18n.Err("backup.err.no_password")
 	}
 	return nil
 }
 
 func (m *Manager) Running() bool { return m.running.Load() }
+
+// Lang is the language of messages sent to the chat.
+func (m *Manager) Lang() i18n.Lang {
+	if m.Store == nil {
+		return i18n.Pick(m.Cfg.Language)
+	}
+	return i18n.Pick(m.Store.Get().Language, m.Cfg.Language)
+}
 
 func Targets(target string) []string {
 	switch target {
@@ -116,7 +125,7 @@ func (m *Manager) Run(ctx context.Context, reason string) error {
 		log.Printf("backup: save status: %v", uerr)
 	}
 
-	m.Notify.Send(ctx, m.format(reason, dumps, results, err, time.Since(start)))
+	m.Notify.Send(ctx, m.format(m.Lang(), reason, dumps, results, err, time.Since(start)))
 	if !ok {
 		return errors.New("backup failed")
 	}
@@ -128,14 +137,14 @@ func (m *Manager) run(ctx context.Context, cfg settings.Backup) ([]dbdump.Result
 		return nil, nil, err
 	}
 	if len(cfg.Paths) == 0 && len(cfg.Databases) == 0 {
-		return nil, nil, errors.New("nothing to back up: add paths with /paths add /path or databases with /db")
+		return nil, nil, i18n.Err("backup.err.nothing")
 	}
 	if m.Cfg.PreBackupCmd != "" {
 		hookCtx, cancel := context.WithTimeout(ctx, time.Hour)
 		defer cancel()
 		out, err := exec.CommandContext(hookCtx, "/bin/sh", "-c", m.Cfg.PreBackupCmd).CombinedOutput()
 		if err != nil {
-			return nil, nil, fmt.Errorf("pre-backup command: %v: %s", err, tail(out))
+			return nil, nil, i18n.Err("backup.err.pre_command", fmt.Sprintf("%v: %s", err, tail(out)))
 		}
 	}
 
@@ -144,14 +153,14 @@ func (m *Manager) run(ctx context.Context, cfg settings.Backup) ([]dbdump.Result
 	if len(cfg.Databases) > 0 {
 		dir := m.DumpsDir()
 		if err := checkFreeSpace(m.Cfg.DataDir); err != nil {
-			return nil, nil, fmt.Errorf("database dumps: %w", err)
+			return nil, nil, err
 		}
 		// Dumps only need to live until restic has stored them.
 		os.RemoveAll(dir)
 		defer os.RemoveAll(dir)
 		dumps = dbdump.DumpAll(ctx, dir, cfg.Databases)
 		if err := dbdump.WriteManifest(dir, dumps); err != nil {
-			return dumps, nil, fmt.Errorf("database manifest: %w", err)
+			return dumps, nil, i18n.Err("backup.err.manifest", err.Error())
 		}
 		for _, d := range dumps {
 			if d.Err == nil {
@@ -161,7 +170,7 @@ func (m *Manager) run(ctx context.Context, cfg settings.Backup) ([]dbdump.Result
 		}
 	}
 	if len(paths) == 0 {
-		return dumps, nil, errors.New("every database dump failed")
+		return dumps, nil, i18n.Err("backup.err.all_dumps_failed")
 	}
 
 	var results []Result
@@ -187,7 +196,7 @@ func (m *Manager) backupTarget(ctx context.Context, target string, cfg settings.
 	args := []string{"backup", "--json", "--tag", "vps-alert", "--host", m.Cfg.ServerName, "--exclude-caches"}
 	out, err := m.restic(ctx, target, append(args, paths...)...)
 	if code := exitCode(err); code == exitIncomplete {
-		res.Warning = "some files could not be read"
+		res.Warnings = append(res.Warnings, i18n.Err("backup.warn.incomplete"))
 	} else if err != nil {
 		res.Err = err
 		return res
@@ -200,7 +209,7 @@ func (m *Manager) backupTarget(ctx context.Context, target string, cfg settings.
 			"--keep-weekly", strconv.Itoa(cfg.KeepWeekly),
 			"--keep-monthly", strconv.Itoa(cfg.KeepMonthly))
 		if err != nil {
-			res.Warning = strings.TrimPrefix(res.Warning+"; ", "; ") + "cleaning old snapshots failed: " + err.Error()
+			res.Warnings = append(res.Warnings, i18n.Err("backup.warn.forget", err.Error()))
 		}
 	}
 	return res
@@ -256,7 +265,7 @@ func (m *Manager) Schedule(ctx context.Context) {
 			log.Printf("backup schedule: %v", err)
 			continue
 		}
-		if err := m.Run(ctx, "scheduled"); err != nil && !errors.Is(err, ErrRunning) {
+		if err := m.Run(ctx, i18n.T(m.Lang(), "backup.reason.scheduled")); err != nil && !errors.Is(err, ErrRunning) {
 			log.Printf("scheduled backup: %v", err)
 		}
 	}
@@ -268,7 +277,7 @@ func (m *Manager) repo(target string) (string, []string, error) {
 		return m.Cfg.LocalRepo, nil, nil
 	case "r2":
 		if !m.Cfg.R2Enabled() {
-			return "", nil, errors.New("R2 is not configured (set R2_* in the env file)")
+			return "", nil, i18n.Err("backup.err.no_r2")
 		}
 		repo := fmt.Sprintf("s3:https://%s.r2.cloudflarestorage.com/%s/%s",
 			m.Cfg.R2AccountID, m.Cfg.R2Bucket, m.Cfg.R2Prefix)
@@ -375,7 +384,7 @@ func parseSummary(out []byte, res *Result) {
 	}
 }
 
-func (m *Manager) format(reason string, dumps []dbdump.Result, results []Result, err error, took time.Duration) string {
+func (m *Manager) format(l i18n.Lang, reason string, dumps []dbdump.Result, results []Result, err error, took time.Duration) string {
 	server := html.EscapeString(m.Cfg.ServerName)
 	ok := err == nil
 	var b strings.Builder
@@ -386,7 +395,7 @@ func (m *Manager) format(reason string, dumps []dbdump.Result, results []Result,
 				good++
 			}
 		}
-		fmt.Fprintf(&b, "\n🗄 Databases: %d/%d dumped", good, len(dumps))
+		b.WriteString("\n" + i18n.T(l, "backup.dumps_summary", good, len(dumps)))
 		for _, d := range dumps {
 			if d.Err != nil {
 				ok = false
@@ -398,25 +407,25 @@ func (m *Manager) format(reason string, dumps []dbdump.Result, results []Result,
 		b.WriteString("\n")
 	}
 	if err != nil {
-		fmt.Fprintf(&b, "\n❌ <code>%s</code>", html.EscapeString(err.Error()))
+		fmt.Fprintf(&b, "\n❌ <code>%s</code>", html.EscapeString(i18n.Text(l, err)))
 	}
 	for _, r := range results {
 		if r.Err != nil {
 			ok = false
-			fmt.Fprintf(&b, "\n❌ <b>%s</b>: <code>%s</code>", r.Target, html.EscapeString(r.Err.Error()))
+			fmt.Fprintf(&b, "\n❌ <b>%s</b>: <code>%s</code>", r.Target, html.EscapeString(i18n.Text(l, r.Err)))
 			continue
 		}
-		fmt.Fprintf(&b, "\n✅ <b>%s</b>: snapshot <code>%s</code>, +%s new, %s total, %d new files",
-			r.Target, r.SnapshotID, metrics.Bytes(r.DataAdded), metrics.Bytes(r.TotalBytes), r.FilesNew)
-		if r.Warning != "" {
-			fmt.Fprintf(&b, "\n⚠️ %s", html.EscapeString(r.Warning))
+		b.WriteString("\n" + i18n.T(l, "backup.target_ok",
+			r.Target, r.SnapshotID, metrics.Bytes(r.DataAdded), metrics.Bytes(r.TotalBytes), r.FilesNew))
+		for _, w := range r.Warnings {
+			fmt.Fprintf(&b, "\n⚠️ %s", html.EscapeString(i18n.Text(l, w)))
 		}
 	}
-	head := "✅ <b>Backup finished</b>"
+	head := i18n.T(l, "backup.finished")
 	if !ok {
-		head = "❌ <b>Backup failed</b>"
+		head = i18n.T(l, "backup.failed")
 	}
-	return fmt.Sprintf("%s: %s (%s)\n%s\n\n⏱ %s", head, server, reason, b.String(), took.Round(time.Second))
+	return fmt.Sprintf("%s: %s (%s)\n%s\n\n⏱ %s", head, server, html.EscapeString(reason), b.String(), took.Round(time.Second))
 }
 
 func checkFreeSpace(path string) error {
@@ -428,7 +437,7 @@ func checkFreeSpace(path string) error {
 				return nil
 			}
 			if u.Free < minFreeBytes {
-				return fmt.Errorf("only %s free on %s", metrics.Bytes(u.Free), p)
+				return i18n.Err("backup.err.low_space", metrics.Bytes(u.Free), p)
 			}
 			return nil
 		}

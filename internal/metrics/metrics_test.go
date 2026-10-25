@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/AzizSobirov/vps-alert/internal/i18n"
 )
 
 func TestCollect(t *testing.T) {
@@ -14,7 +16,7 @@ func TestCollect(t *testing.T) {
 	if s.MemTotal == 0 || s.Cores == 0 || len(s.Disks) == 0 {
 		t.Errorf("incomplete snapshot: %+v", s)
 	}
-	out := s.Format("test")
+	out := s.Format(i18n.EN, "test")
 	if !strings.Contains(out, "CPU") {
 		t.Errorf("unexpected format: %s", out)
 	}
