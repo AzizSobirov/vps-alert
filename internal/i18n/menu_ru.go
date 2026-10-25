@@ -2,6 +2,10 @@ package i18n
 
 func init() {
 	register(RU, map[string]string{
+		"menu.btn.whitelist":     "📋 Белый список",
+		"menu.btn.add_whitelist": "➕ Добавить IP или пользователя",
+		"menu.wl.title":          "📋 <b>Доверенные IP и пользователи</b>\nИх входы приходят без звука.",
+		"menu.ask.whitelist":     "📋 Отправьте IP-адрес, сеть вроде <code>10.0.0.0/24</code> или имя пользователя вроде <code>deploy</code>",
 		"menu.btn.tog_pwlogin":   "Оповещения о входе по паролю",
 		"menu.title":             "🖥 <b>%s</b>",
 		"menu.backup_never":      "💾 Бэкапов пока нет",

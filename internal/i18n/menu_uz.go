@@ -2,6 +2,10 @@ package i18n
 
 func init() {
 	register(UZ, map[string]string{
+		"menu.btn.whitelist":     "📋 Oq ro'yxat",
+		"menu.btn.add_whitelist": "➕ IP yoki foydalanuvchi qo'shish",
+		"menu.wl.title":          "📋 <b>Ishonchli IP va foydalanuvchilar</b>\nUlarning kirishlari ovozsiz keladi.",
+		"menu.ask.whitelist":     "📋 IP manzil, <code>10.0.0.0/24</code> kabi tarmoq yoki <code>deploy</code> kabi foydalanuvchi nomini yuboring",
 		"menu.btn.tog_pwlogin":   "Parol bilan kirish alertlari",
 		"menu.title":             "🖥 <b>%s</b>",
 		"menu.backup_never":      "💾 Hali backup olinmagan",

@@ -40,6 +40,9 @@ type Security struct {
 	PortWatch            bool `json:"port_watch"` // alert on newly opened listening ports
 	// Alert when someone logs in over SSH with a password instead of a key.
 	PasswordLoginAlert bool `json:"password_login_alert"`
+	// Addresses or CIDRs added with /whitelist. Logins from them, and from
+	// LOGIN_IP_WHITELIST in the env file, are reported silently.
+	LoginWhitelist []string `json:"login_whitelist"`
 }
 
 type Alerts struct {
@@ -170,6 +173,7 @@ func (s Settings) clone() Settings {
 	s.Services.Units = append([]string(nil), s.Services.Units...)
 	s.Services.Containers = append([]string(nil), s.Services.Containers...)
 	s.HTTPChecks = append([]HTTPCheck(nil), s.HTTPChecks...)
+	s.Security.LoginWhitelist = append([]string(nil), s.Security.LoginWhitelist...)
 	return s
 }
 

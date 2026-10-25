@@ -206,6 +206,16 @@ func (b *Bot) menuCallback(ctx context.Context, l i18n.Lang, q *telegram.Callbac
 			toast = i18n.T(l, "menu.removed")
 		}
 		b.pathsScreen(ctx, l, msgID)
+	case "wl":
+		b.whitelistScreen(ctx, l, msgID)
+	case "wlrm":
+		list := b.Store.Get().Security.LoginWhitelist
+		if i, err := strconv.Atoi(rest); err == nil && i >= 0 && i < len(list) {
+			if _, err := b.removeWhitelist(list[i]); err == nil {
+				toast = i18n.T(l, "menu.removed")
+			}
+		}
+		b.whitelistScreen(ctx, l, msgID)
 	case "ask":
 		b.ask(ctx, l, rest)
 	case "lang":
@@ -246,10 +256,26 @@ func (b *Bot) securityScreen(ctx context.Context, l i18n.Lang, msgID int64) {
 		{btn(onOff(sec.PasswordLoginAlert)+" "+i18n.T(l, "menu.btn.tog_pwlogin"), "m:tog:pwlogin")},
 		{btn(onOff(sec.FileWatch)+" "+i18n.T(l, "menu.btn.tog_files"), "m:tog:files")},
 		{btn(onOff(sec.PortWatch)+" "+i18n.T(l, "menu.btn.tog_ports"), "m:tog:ports")},
-		{btn(i18n.T(l, "menu.btn.ssh_threshold"), "m:ask:sshthr")},
+		{btn(i18n.T(l, "menu.btn.whitelist"), "m:wl"), btn(i18n.T(l, "menu.btn.ssh_threshold"), "m:ask:sshthr")},
 		{btn(i18n.T(l, "menu.btn.menu"), "m:main")},
 	}}
 	b.screen(ctx, msgID, text, kb)
+}
+
+func (b *Bot) whitelistScreen(ctx context.Context, l i18n.Lang, msgID int64) {
+	list := b.Store.Get().Security.LoginWhitelist
+	text := i18n.T(l, "menu.wl.title") + "\n\n" + b.whitelistState(l)
+	if len(list) > 0 {
+		text += "\n\n" + i18n.T(l, "menu.tap_remove")
+	}
+	var rows [][]telegram.Button
+	for i, e := range list {
+		rows = append(rows, []telegram.Button{btn("❌ "+cut(e, 40), "m:wlrm:"+strconv.Itoa(i))})
+	}
+	rows = append(rows,
+		[]telegram.Button{btn(i18n.T(l, "menu.btn.add_whitelist"), "m:ask:wl")},
+		[]telegram.Button{btn(i18n.T(l, "menu.btn.back"), "m:sec")})
+	b.screen(ctx, msgID, text, &telegram.Keyboard{InlineKeyboard: rows})
 }
 
 func (b *Bot) alertsScreen(ctx context.Context, l i18n.Lang, msgID int64) {
@@ -314,6 +340,8 @@ func (b *Bot) ask(ctx context.Context, l i18n.Lang, what string) {
 		cmd, key = "report", "menu.ask.report"
 	case what == "sshthr":
 		cmd, args, key = "ssh", []string{"threshold"}, "menu.ask.ssh_threshold"
+	case what == "wl":
+		cmd, args, key = "whitelist", []string{"add"}, "menu.ask.whitelist"
 	case strings.HasPrefix(what, "alert."):
 		cmd, args, key = "alerts", []string{strings.TrimPrefix(what, "alert.")}, "menu.ask.alert"
 	default:

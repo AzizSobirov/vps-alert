@@ -162,11 +162,18 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64, timeoutSec int) (
 }
 
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, kb *Keyboard) (*Message, error) {
+	return c.SendMessageOpts(ctx, chatID, text, kb, false)
+}
+
+// SendMessageOpts is SendMessage with the option to deliver the message
+// silently, without a sound or vibration on the phone.
+func (c *Client) SendMessageOpts(ctx context.Context, chatID int64, text string, kb *Keyboard, silent bool) (*Message, error) {
 	params := map[string]any{
 		"chat_id":                  chatID,
 		"text":                     text,
 		"parse_mode":               "HTML",
 		"disable_web_page_preview": true,
+		"disable_notification":     silent,
 	}
 	if kb != nil {
 		params["reply_markup"] = kb
@@ -202,6 +209,18 @@ func (c *Client) EditMessage(ctx context.Context, chatID, messageID int64, text 
 		params["reply_markup"] = kb
 	}
 	return c.call(ctx, "editMessageText", params, nil)
+}
+
+// EditReplyMarkup replaces a message's buttons; nil removes them.
+func (c *Client) EditReplyMarkup(ctx context.Context, chatID, messageID int64, kb *Keyboard) error {
+	if kb == nil {
+		kb = &Keyboard{InlineKeyboard: [][]Button{}}
+	}
+	return c.call(ctx, "editMessageReplyMarkup", map[string]any{
+		"chat_id":      chatID,
+		"message_id":   messageID,
+		"reply_markup": kb,
+	}, nil)
 }
 
 func (c *Client) AnswerCallback(ctx context.Context, id, text string) error {

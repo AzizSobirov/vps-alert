@@ -2,6 +2,8 @@ package i18n
 
 func init() {
 	register(UZ, map[string]string{
+		"login.trusted":     "🤝 Ishonchli manzil yoki foydalanuvchi, ovozsiz yuborildi",
+		"login.btn.trust":   "✅ Bu men, IP'ni ishonchli qilish",
 		"login.new_ip":      "🆕 <b>Bu IP manzildan birinchi marta kirildi</b>. Bu siz bo'lmasangiz, darhol choralar ko'ring.",
 		"metrics.os_uptime": "<i>%s</i>, ishlash vaqti %s",
 		"metrics.cpu":       "%s CPU: <b>%.0f%%</b> (%d yadro, yuklama %.2f / %.2f / %.2f)",

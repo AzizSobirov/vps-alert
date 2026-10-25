@@ -93,6 +93,31 @@ Some cloud images set `PasswordAuthentication yes` in a file such as
 `/etc/ssh/sshd_config.d/50-cloud-init.conf`. Files are read in name order and the first value wins,
 which is why the file above starts with `10-`.
 
+## Trusted addresses and users
+
+`/whitelist` holds addresses, networks and user names whose logins are reported silently and are
+never marked as new (see [alerts](alerts.md#trusted-addresses-and-users)).
+
+```
+/whitelist add 92.63.204.12     an address
+/whitelist add 10.0.0.0/24      a network
+/whitelist add deploy           a user, from any address
+/whitelist rm 92.63.204.12
+```
+
+### CI deploys (GitHub Actions and others)
+
+CI runners connect from a different address on every run, so whitelisting addresses does not work,
+and whitelisting all of GitHub's ranges would trust every cloud machine in them. Give the deploys
+their own user and trust that user:
+
+1. Create a user just for deploys, e.g. `sudo adduser --disabled-password deploy`, give it only the
+   permissions the deploy needs, and add the CI's public key to `/home/deploy/.ssh/authorized_keys`.
+2. `/whitelist add deploy`
+
+Deploy logins then arrive silently, are not marked new, and their addresses do not fill the list of
+known addresses. A password login by that user still triggers the password alert, so use a key.
+
 ## Important files
 
 These files are checked every minute:

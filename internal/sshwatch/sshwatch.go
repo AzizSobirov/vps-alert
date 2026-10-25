@@ -26,6 +26,7 @@ import (
 	"github.com/AzizSobirov/vps-alert/internal/knownips"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
+	"github.com/AzizSobirov/vps-alert/internal/trust"
 )
 
 const (
@@ -426,9 +427,14 @@ func (w *Watcher) checkLogins(ctx context.Context, st *state) {
 	st.LastLoginCheck = now
 	w.save(*st)
 
+	// Trusted users, such as a CI deploy account, connect from changing
+	// addresses that would only crowd out the real ones.
+	whitelist := w.Store.Get().Security.LoginWhitelist
 	var addrs []string
 	for _, lg := range fresh {
-		addrs = append(addrs, lg.IP)
+		if !trust.Match(whitelist, lg.User, "") {
+			addrs = append(addrs, lg.IP)
+		}
 	}
 	if err := knownips.Add(w.knownPath(), now, addrs...); err != nil {
 		log.Printf("sshwatch: %v", err)

@@ -12,6 +12,20 @@ curl -fsSL https://github.com/AzizSobirov/vps-alert/releases/latest/download/ins
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
+### Added
+- `/whitelist`: trusted addresses, networks and user names, also in the menu under Security. A user
+  entry trusts that user from any address, for CI deploy accounts such as GitHub Actions.
+- A **✅ It was me** button under login alerts adds the address to the whitelist.
+
+### Changed
+- Logins from whitelisted addresses, including `LOGIN_IP_WHITELIST`, are now reported silently
+  instead of not at all, so whitelisting cannot hide a login.
+
+### Upgrade notes
+- If you set `LOGIN_IP_WHITELIST`, logins from those addresses now arrive as silent messages.
+
 ## [0.4.0] - 2026-10-26
 
 ### Added
@@ -83,7 +97,8 @@ First release.
 - Optional heartbeat for healthchecks.io or Uptime Kuma.
 - An installer that verifies the downloaded binary's checksum.
 
-[Unreleased]: https://github.com/AzizSobirov/vps-alert/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/AzizSobirov/vps-alert/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.1.0...v0.2.0

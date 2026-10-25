@@ -97,6 +97,33 @@ Ba'zi bulut image'larida `PasswordAuthentication yes` alohida faylda yozilgan bo
 `/etc/ssh/sshd_config.d/50-cloud-init.conf`. Fayllar nomi bo'yicha tartibda o'qiladi va birinchi
 qiymat ustun turadi, shuning uchun yuqoridagi fayl nomi `10-` bilan boshlanadi.
 
+## Ishonchli manzillar va foydalanuvchilar
+
+`/whitelist` da kirishlari ovozsiz keladigan va hech qachon yangi deb belgilanmaydigan manzil, tarmoq
+va foydalanuvchi nomlari saqlanadi (qarang: [alertlar](alerts.md#ishonchli-manzillar-va-foydalanuvchilar)).
+
+```
+/whitelist add 92.63.204.12     manzil
+/whitelist add 10.0.0.0/24      tarmoq
+/whitelist add deploy           foydalanuvchi, istalgan manzildan
+/whitelist rm 92.63.204.12
+```
+
+### CI deploy'lar (GitHub Actions va boshqalar)
+
+CI runner'lar har safar boshqa manzildan ulanadi, shuning uchun manzilni oq ro'yxatga qo'shish ish
+bermaydi. GitHub'ning barcha diapazonlarini qo'shish esa ulardagi har qanday bulut serverni ishonchli
+qilib qo'yadi. Deploy'lar uchun alohida foydalanuvchi oching va uni ishonchli qiling:
+
+1. Faqat deploy uchun foydalanuvchi yarating, masalan `sudo adduser --disabled-password deploy`,
+   unga deploy uchun kerakli huquqlarnigina bering va CI'ning ochiq kalitini
+   `/home/deploy/.ssh/authorized_keys` ga qo'shing.
+2. `/whitelist add deploy`
+
+Shundan keyin deploy kirishlari ovozsiz keladi, yangi deb belgilanmaydi va ularning manzillari
+ma'lum manzillar ro'yxatini to'ldirib yubormaydi. Bu foydalanuvchi parol bilan kirsa, parol alerti
+baribir keladi, shuning uchun kalit ishlating.
+
 ## Muhim fayllar
 
 Bu fayllar har daqiqada tekshiriladi:

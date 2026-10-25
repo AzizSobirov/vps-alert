@@ -4,6 +4,8 @@ package i18n
 // backup reports, login alerts, restore reports and service messages.
 func init() {
 	register(EN, map[string]string{
+		"login.trusted":     "🤝 Trusted address or user, sent silently",
+		"login.btn.trust":   "✅ It was me, trust this IP",
 		"login.new_ip":      "🆕 <b>First login from this IP address</b>. If it was not you, act now.",
 		"metrics.os_uptime": "<i>%s</i>, uptime %s",
 		"metrics.cpu":       "%s CPU: <b>%.0f%%</b> (%d cores, load %.2f / %.2f / %.2f)",

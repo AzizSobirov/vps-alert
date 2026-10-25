@@ -100,8 +100,22 @@ Ularni PAM yuboradi: installer `/etc/pam.d/sshd` fayliga bitta qator qo'shadi. N
   sekinlashsa ham login hech qachon kechikmaydi va bloklanmaydi.
 - Kalit bilan ham, parol bilan ham kirishlar xabar qilinadi.
 
-O'zingizning kirishlaringiz uchun alert kelmasligi uchun IP yoki tarmoqlaringizni env faylga yozing
-va servisni qayta ishga tushiring:
+### Ishonchli manzillar va foydalanuvchilar
+
+Oq ro'yxatdagi manzil, tarmoq yoki foydalanuvchilardan kirishlar baribir xabar qilinadi, lekin
+**ovozsiz**, telefon jiringlamaydi, va ular hech qachon yangi manzil deb belgilanmaydi. Ular
+yashirilmaydi: kimdir Telegram akkauntingizni egallab, o'z manzilini oq ro'yxatga qo'shsa ham, uning
+kirishlari baribir ko'rinib turadi.
+
+- Login xabari ostidagi **✅ Bu men, IP'ni ishonchli qilish** tugmasini bosing, yoki
+- `/whitelist add 92.63.204.12`, `/whitelist add 10.0.0.0/24` yuboring, yoki
+- **/menu → 🛡 Xavfsizlik → 📋 Oq ro'yxat** dan foydalaning.
+
+Har safar boshqa manzildan ulanadigan **CI deploy akkaunti** uchun (masalan, GitHub Actions)
+foydalanuvchini ishonchli qiling: `/whitelist add deploy`. Qarang:
+[xavfsizlik](security.md#ishonchli-manzillar-va-foydalanuvchilar).
+
+Manzillarni env faylda ham yozish mumkin, bu servisni qayta ishga tushirmasdan ishlaydi:
 
 ```sh
 LOGIN_IP_WHITELIST=203.0.113.7,198.51.100.0/24

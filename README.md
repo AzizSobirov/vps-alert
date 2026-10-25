@@ -238,6 +238,7 @@ The easiest way is `/menu`: buttons for everything below. The commands:
 | `/ssh`, `/ssh threshold 50`, `/ssh off` | Failed SSH logins in the last 24h; brute-force alert threshold |
 | `/files`, `/files off` | Watching important files (users, sudo, SSH keys, cron) |
 | `/ports`, `/ports off` | Listening ports; alerts on new ones |
+| `/whitelist add 92.63.204.12`, `/whitelist add deploy` | Trusted addresses, networks and users (e.g. a CI deploy account): their logins arrive silently |
 | `/backup` | Menu: run now, list snapshots, choose target, schedule |
 | `/db` | Find databases and choose which to back up |
 | `/paths add /var/www`, `/paths rm /var/www` | Paths to back up |

@@ -98,7 +98,20 @@ They come from PAM: the installer adds one line to `/etc/pam.d/sshd`. Consequenc
   delays or blocks a login.
 - Key and password logins are both reported.
 
-To stop alerts for your own logins, list your IPs or networks in the env file and restart:
+### Trusted addresses and users
+
+Logins from whitelisted addresses, networks or users are still reported, but **silently**, without
+a sound on your phone, and never marked as a new address. They are not hidden: if someone took over
+your Telegram account and whitelisted their own address, their logins would still show up.
+
+- Press **✅ It was me, trust this IP** under a login alert, or
+- send `/whitelist add 92.63.204.12`, `/whitelist add 10.0.0.0/24`, or
+- use **/menu → 🛡 Security → 📋 Whitelist**.
+
+For a **CI deploy account** such as GitHub Actions, which connects from a different address every
+run, trust the user instead: `/whitelist add deploy`. See [security](security.md#trusted-addresses-and-users).
+
+Addresses can also be listed in the env file; this works without a restart:
 
 ```sh
 LOGIN_IP_WHITELIST=203.0.113.7,198.51.100.0/24

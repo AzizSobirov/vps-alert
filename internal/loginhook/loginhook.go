@@ -20,6 +20,7 @@ import (
 	"github.com/AzizSobirov/vps-alert/internal/knownips"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
+	"github.com/AzizSobirov/vps-alert/internal/trust"
 )
 
 const childEnv = "VPS_ALERT_PAM_CHILD"
@@ -76,25 +77,41 @@ func Whitelisted(host string, nets []*net.IPNet) bool {
 }
 
 func Notify(cfg *config.Config, ev Event) error {
-	if ev.Host != "" && Whitelisted(ev.Host, cfg.LoginWhitelist) {
-		return nil
-	}
-	l := i18n.Pick(savedLanguage(cfg.SettingsPath()), cfg.Language)
+	text, kb, silent := Message(cfg, savedSettings(cfg.SettingsPath()), ev, time.Now())
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_, err := telegram.New(cfg.BotToken).SendMessageOpts(ctx, cfg.ChatID, text, kb, silent)
+	return err
+}
+
+// Message builds the login alert. A trusted login (whitelisted address or
+// user, from the env file or /whitelist) is sent silently but still sent. An
+// untrusted one from an IP address gets a button to trust that address, and
+// is marked when the address has never logged in before.
+func Message(cfg *config.Config, s settings.Settings, ev Event, now time.Time) (text string, kb *telegram.Keyboard, silent bool) {
+	l := i18n.Pick(s.Language, cfg.Language)
+	trusted := (ev.Host != "" && Whitelisted(ev.Host, cfg.LoginWhitelist)) ||
+		trust.Match(s.Security.LoginWhitelist, ev.User, ev.Host)
+
 	from := ev.Host
 	if from == "" {
 		from = i18n.T(l, "login.local")
 	}
-	text := i18n.T(l, "login.alert",
+	text = i18n.T(l, "login.alert",
 		html.EscapeString(cfg.ServerName), html.EscapeString(ev.User), html.EscapeString(from),
-		html.EscapeString(ev.Service), time.Now().Format("2006-01-02 15:04:05 MST"))
-	if ev.Host != "" && NewAddress(filepath.Join(cfg.DataDir, knownips.FileName), ev.Host, time.Now()) {
+		html.EscapeString(ev.Service), now.Format("2006-01-02 15:04:05 MST"))
+	if trusted {
+		return text + "\n" + i18n.T(l, "login.trusted"), nil, true
+	}
+	if ev.Host != "" && NewAddress(filepath.Join(cfg.DataDir, knownips.FileName), ev.Host, now) {
 		text = i18n.T(l, "login.new_ip") + "\n" + text
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	_, err := telegram.New(cfg.BotToken).SendMessage(ctx, cfg.ChatID, text, nil)
-	return err
+	if net.ParseIP(ev.Host) != nil {
+		kb = &telegram.Keyboard{InlineKeyboard: [][]telegram.Button{{
+			{Text: i18n.T(l, "login.btn.trust"), CallbackData: "trust:" + ev.Host},
+		}}}
+	}
+	return text, kb, false
 }
 
 // NewAddress reports whether host has never logged in before, and records
@@ -111,16 +128,12 @@ func NewAddress(path, host string, now time.Time) bool {
 	return !seen
 }
 
-// savedLanguage reads the language chosen with /lang. It only reads the
-// settings file: the PAM hook must never create files.
-func savedLanguage(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
+// savedSettings reads the settings changed from the bot (language,
+// whitelist). It only reads the file: the PAM hook must never create it.
+func savedSettings(path string) settings.Settings {
 	var s settings.Settings
-	if json.Unmarshal(data, &s) != nil {
-		return ""
+	if data, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(data, &s)
 	}
-	return s.Language
+	return s
 }
