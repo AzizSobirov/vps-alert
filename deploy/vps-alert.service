@@ -1,0 +1,16 @@
+[Unit]
+Description=vps-alert server monitoring and backups
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/vps-alert -env /etc/vps-alert/vps-alert.env run
+Restart=always
+RestartSec=5
+# Root is needed to read every backed up path and auth data.
+User=root
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

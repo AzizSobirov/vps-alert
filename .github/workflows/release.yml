@@ -1,0 +1,28 @@
+# Builds the Linux binaries and publishes a GitHub release when a version
+# tag is pushed:  git tag v0.1.0 && git push origin v0.1.0
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get install -y -qq restic
+      - run: make test
+      - run: make release VERSION=${GITHUB_REF_NAME}
+      - name: Checksums
+        run: cd dist && sha256sum vps-alert-linux-* > checksums.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* deploy/install.sh --generate-notes
