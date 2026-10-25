@@ -30,3 +30,26 @@ func TestBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestTopProcesses(t *testing.T) {
+	byCPU, byMem, err := TopProcesses(context.Background(), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byMem) == 0 || len(byMem) > 5 || len(byCPU) > 5 {
+		t.Fatalf("byCPU %d, byMem %d", len(byCPU), len(byMem))
+	}
+	for i := 1; i < len(byMem); i++ {
+		if byMem[i].RSS > byMem[i-1].RSS {
+			t.Error("byMem not sorted")
+		}
+	}
+	for i := 1; i < len(byCPU); i++ {
+		if byCPU[i].CPUPercent > byCPU[i-1].CPUPercent {
+			t.Error("byCPU not sorted")
+		}
+	}
+	if byMem[0].PID == 0 || byMem[0].MemPercent <= 0 {
+		t.Errorf("incomplete process: %+v", byMem[0])
+	}
+}

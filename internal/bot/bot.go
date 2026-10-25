@@ -38,6 +38,9 @@ type Bot struct {
 
 	username string
 
+	// Open menu question awaiting a typed answer. Update loop only.
+	prompt pendingPrompt
+
 	// Last database scan. Only touched from the update loop, so unlocked.
 	found        []settings.Database
 	missing      map[settings.Database]bool // selected but not found
@@ -51,24 +54,66 @@ type Bot struct {
 // Its texts are the i18n keys "help.<name>.short" and "help.<name>".
 type command struct {
 	name    string
-	group   string // help section: monitor, backup or bot
+	group   string // help section, see helpGroups
 	example string
 	doc     string // page under docs/
+
+	// Commands added with registerCommand carry their own handlers; the
+	// built-in ones are dispatched in Bot.command and Bot.state.
+	run   func(b *Bot, ctx context.Context, l i18n.Lang, args []string) error
+	state func(b *Bot, l i18n.Lang) string // current setting shown above the help, optional
+}
+
+// helpGroups orders the sections of /help and the command menu.
+var helpGroups = []string{"monitor", "security", "backup", "bot"}
+
+// callbackHandlers handle inline buttons whose data is "<action>:<arg>" for
+// actions registered with registerCallback.
+var callbackHandlers = map[string]func(b *Bot, ctx context.Context, l i18n.Lang, q *telegram.CallbackQuery, arg string){}
+
+// registerCommand adds a command from its own file, so features do not all
+// have to edit this one. Call it from init.
+func registerCommand(c command) {
+	if _, dup := lookupCommand(c.name); dup {
+		panic("bot: duplicate command " + c.name)
+	}
+	commands = append(commands, c)
+}
+
+// registerCallback adds an inline button handler. Call it from init.
+func registerCallback(action string, fn func(b *Bot, ctx context.Context, l i18n.Lang, q *telegram.CallbackQuery, arg string)) {
+	if _, dup := callbackHandlers[action]; dup {
+		panic("bot: duplicate callback " + action)
+	}
+	callbackHandlers[action] = fn
+}
+
+// orderedCommands returns the commands grouped in helpGroups order.
+func orderedCommands() []command {
+	var out []command
+	for _, g := range helpGroups {
+		for _, c := range commands {
+			if c.group == g {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
 }
 
 var commands = []command{
-	{"status", "monitor", "/status", "alerts.md"},
-	{"alerts", "monitor", "/alerts cpu 90", "alerts.md"},
-	{"mute", "monitor", "/mute 2h", "alerts.md"},
-	{"unmute", "monitor", "/unmute", "alerts.md"},
-	{"report", "monitor", "/report 09:00", "alerts.md"},
-	{"backup", "backup", "/backup", "backups.md"},
-	{"db", "backup", "/db", "databases.md"},
-	{"paths", "backup", "/paths add /var/www", "backups.md"},
-	{"schedule", "backup", "/schedule 1 03:00", "schedule-and-retention.md"},
-	{"retention", "backup", "/retention 7 4 6", "schedule-and-retention.md"},
-	{"lang", "bot", "/lang uz", "telegram.md"},
-	{"help", "bot", "/help schedule", "telegram.md"},
+	{name: "status", group: "monitor", example: "/status", doc: "alerts.md"},
+	{name: "alerts", group: "monitor", example: "/alerts cpu 90", doc: "alerts.md"},
+	{name: "mute", group: "monitor", example: "/mute 2h", doc: "alerts.md"},
+	{name: "unmute", group: "monitor", example: "/unmute", doc: "alerts.md"},
+	{name: "report", group: "monitor", example: "/report 09:00", doc: "alerts.md"},
+	{name: "backup", group: "backup", example: "/backup", doc: "backups.md"},
+	{name: "db", group: "backup", example: "/db", doc: "databases.md"},
+	{name: "paths", group: "backup", example: "/paths add /var/www", doc: "backups.md"},
+	{name: "schedule", group: "backup", example: "/schedule 1 03:00", doc: "schedule-and-retention.md"},
+	{name: "retention", group: "backup", example: "/retention 7 4 6", doc: "schedule-and-retention.md"},
+	{name: "lang", group: "bot", example: "/lang uz", doc: "telegram.md"},
+	{name: "help", group: "bot", example: "/help schedule", doc: "telegram.md"},
 }
 
 func lookupCommand(name string) (command, bool) {
@@ -138,7 +183,7 @@ func (b *Bot) language() i18n.Lang {
 
 func botCommands(l i18n.Lang) []telegram.BotCommand {
 	var cmds []telegram.BotCommand
-	for _, c := range commands {
+	for _, c := range orderedCommands() {
 		cmds = append(cmds, telegram.BotCommand{Command: c.name, Description: i18n.T(l, "help."+c.name+".short")})
 	}
 	return cmds
@@ -160,7 +205,16 @@ func (b *Bot) handle(ctx context.Context, u telegram.Update) {
 		}
 	case u.Message != nil:
 		m := u.Message
-		if m.From == nil || !strings.HasPrefix(m.Text, "/") {
+		if m.From == nil {
+			return
+		}
+		// An answer to a menu question may itself start with "/", like a
+		// path, so it is checked before command parsing.
+		if b.prompt.msgID != 0 && b.allowed(m.Chat.ID, m.From.ID) && b.isPromptAnswer(m) {
+			b.answerPrompt(ctx, m)
+			return
+		}
+		if !strings.HasPrefix(m.Text, "/") {
 			return
 		}
 		if !b.allowed(m.Chat.ID, m.From.ID) {
@@ -250,7 +304,7 @@ func (b *Bot) command(ctx context.Context, from *telegram.User, cmd string, args
 	var err error
 	switch cmd {
 	case "start":
-		b.reply(ctx, helpList(l), nil)
+		b.showMenu(ctx, l, 0)
 	case "help":
 		err = b.help(ctx, l, args)
 	case "status":
@@ -283,7 +337,11 @@ func (b *Bot) command(ctx context.Context, from *telegram.User, cmd string, args
 	case "lang":
 		err = b.lang(ctx, l, args)
 	default:
-		b.reply(ctx, i18n.T(l, "bot.unknown"), nil)
+		if c, ok := lookupCommand(cmd); ok && c.run != nil {
+			err = c.run(b, ctx, l, args)
+		} else {
+			b.reply(ctx, i18n.T(l, "bot.unknown"), nil)
+		}
 	}
 	if err != nil {
 		msg := "⚠️ " + html.EscapeString(i18n.Text(l, err))
@@ -342,6 +400,7 @@ func (b *Bot) callback(ctx context.Context, q *telegram.CallbackQuery) {
 					{Text: i18n.T(l, "bot.every.3days"), CallbackData: "every:3"},
 					{Text: i18n.T(l, "bot.every.weekly"), CallbackData: "every:7"},
 				}, {
+					{Text: i18n.T(l, "menu.btn.time"), CallbackData: "m:ask:time"},
 					{Text: i18n.T(l, "bot.every.off"), CallbackData: "every:off"},
 					{Text: i18n.T(l, "bot.btn.back"), CallbackData: "menu"},
 				}},
@@ -397,7 +456,11 @@ func (b *Bot) callback(ctx context.Context, q *telegram.CallbackQuery) {
 		b.TG.AnswerCallback(ctx, q.ID, "")
 		b.backupMenu(ctx, msgID)
 	default:
-		b.TG.AnswerCallback(ctx, q.ID, "")
+		if fn, ok := callbackHandlers[action]; ok {
+			fn(b, ctx, l, q, arg)
+		} else {
+			b.TG.AnswerCallback(ctx, q.ID, "")
+		}
 	}
 }
 
@@ -410,10 +473,13 @@ func (b *Bot) update(ctx context.Context, l i18n.Lang, q *telegram.CallbackQuery
 }
 
 func (b *Bot) status(ctx context.Context, l i18n.Lang) {
+	b.reply(ctx, b.statusText(ctx, l), nil)
+}
+
+func (b *Bot) statusText(ctx context.Context, l i18n.Lang) string {
 	snap, err := metrics.Collect(ctx)
 	if err != nil {
-		b.reply(ctx, "⚠️ "+html.EscapeString(err.Error()), nil)
-		return
+		return "⚠️ " + html.EscapeString(err.Error())
 	}
 	text := snap.Format(l, b.Cfg.ServerName)
 	s := b.Store.Get()
@@ -423,7 +489,7 @@ func (b *Bot) status(ctx context.Context, l i18n.Lang) {
 	if b.Backup.Running() {
 		text += "\n" + i18n.T(l, "bot.status.backup_running")
 	}
-	b.reply(ctx, text, nil)
+	return text
 }
 
 // backupMenu sends the backup overview, or edits message msgID in place.
@@ -474,7 +540,11 @@ func (b *Bot) backupMenu(ctx context.Context, msgID int64) {
 		{Text: i18n.T(l, "bot.btn.target"), CallbackData: "target"},
 		{Text: i18n.T(l, "bot.btn.schedule"), CallbackData: "every"},
 	}, {
+		{Text: i18n.T(l, "menu.btn.retention"), CallbackData: "m:ret"},
+		{Text: i18n.T(l, "menu.btn.paths"), CallbackData: "m:paths"},
+	}, {
 		{Text: i18n.T(l, "bot.btn.databases"), CallbackData: "dbscan"},
+		{Text: i18n.T(l, "menu.btn.menu"), CallbackData: "m:main"},
 	}}}
 	if msgID != 0 {
 		if err := b.TG.EditMessage(ctx, b.Cfg.ChatID, msgID, t.String(), kb); err == nil {
@@ -713,6 +783,11 @@ func (b *Bot) alerts(ctx context.Context, l i18n.Lang, args []string) error {
 				return usage(i18n.Err("bot.err.cooldown"))
 			}
 			a.CooldownMin = v
+		case "forecast":
+			if v < 0 || v > 90 {
+				return usage(i18n.Err("bot.err.forecast"))
+			}
+			a.ForecastDays = v
 		default:
 			return usage(i18n.Err("bot.err.alert_key", args[0]))
 		}
@@ -862,8 +937,15 @@ func (b *Bot) state(l i18n.Lang, name string) string {
 		return t.String()
 	case "alerts":
 		a := s.Alerts
+		forecast := i18n.T(l, "bot.state.forecast_off")
+		if a.ForecastDays > 0 {
+			forecast = i18n.T(l, "bot.state.forecast", a.ForecastDays)
+		}
 		return i18n.T(l, "bot.state.alerts", pct(l, a.CPUPercent), pct(l, a.MemPercent), pct(l, a.DiskPercent),
-			pct(l, a.InodePercent), a.DurationMin, a.CooldownMin)
+			pct(l, a.InodePercent), a.DurationMin, a.CooldownMin) + "\n" + forecast
+	}
+	if c, ok := lookupCommand(name); ok && c.state != nil {
+		return c.state(b, l)
 	}
 	return ""
 }
@@ -881,7 +963,7 @@ func helpList(l i18n.Lang) string {
 	var t strings.Builder
 	t.WriteString(i18n.T(l, "bot.help.title") + "\n")
 	group := ""
-	for _, c := range commands {
+	for _, c := range orderedCommands() {
 		if c.group != group {
 			group = c.group
 			fmt.Fprintf(&t, "\n%s\n", i18n.T(l, "bot.help.group."+group))

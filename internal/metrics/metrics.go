@@ -19,8 +19,12 @@ import (
 )
 
 type Disk struct {
-	Mount        string
-	Total, Used  uint64
+	Mount       string
+	Total, Used uint64
+	// Free is the space still available to ordinary users; Used+Free is
+	// the point at which the disk counts as full (root's reserved blocks
+	// excluded).
+	Free         uint64
 	Percent      float64
 	InodePercent float64
 }
@@ -105,6 +109,7 @@ func Collect(ctx context.Context) (Snapshot, error) {
 			Mount:        p.Mountpoint,
 			Total:        u.Total,
 			Used:         u.Used,
+			Free:         u.Free,
 			Percent:      u.UsedPercent,
 			InodePercent: u.InodesUsedPercent,
 		})

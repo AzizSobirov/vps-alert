@@ -13,11 +13,31 @@ import (
 )
 
 type Settings struct {
-	Alerts     Alerts    `json:"alerts"`
-	Report     Report    `json:"report"`
-	Backup     Backup    `json:"backup"`
-	MutedUntil time.Time `json:"muted_until"`
-	Language   string    `json:"language,omitempty"` // set with /lang; empty means LANGUAGE from env
+	Alerts     Alerts      `json:"alerts"`
+	Report     Report      `json:"report"`
+	Backup     Backup      `json:"backup"`
+	MutedUntil time.Time   `json:"muted_until"`
+	Language   string      `json:"language,omitempty"` // set with /lang; empty means LANGUAGE from env
+	Services   Services    `json:"services"`
+	HTTPChecks []HTTPCheck `json:"http_checks"`
+	Security   Security    `json:"security"`
+}
+
+// Services are the systemd units and Docker containers watched for stopping.
+type Services struct {
+	Units      []string `json:"units"`
+	Containers []string `json:"containers"`
+}
+
+type HTTPCheck struct {
+	URL string `json:"url"`
+}
+
+type Security struct {
+	// Failed SSH logins per hour that trigger an alert; 0 disables.
+	FailedLoginThreshold int  `json:"failed_login_threshold"`
+	FileWatch            bool `json:"file_watch"` // alert on changes to important files
+	PortWatch            bool `json:"port_watch"` // alert on newly opened listening ports
 }
 
 type Alerts struct {
@@ -29,6 +49,9 @@ type Alerts struct {
 	DurationMin int `json:"duration_min"`
 	// While an alert keeps firing, it is repeated at most this often.
 	CooldownMin int `json:"cooldown_min"`
+	// Warn when a disk is predicted to fill up within this many days; 0
+	// disables the forecast.
+	ForecastDays int `json:"forecast_days"`
 }
 
 type Report struct {
@@ -65,6 +88,7 @@ type Backup struct {
 	NextRun      time.Time  `json:"next_run"`
 	LastRun      time.Time  `json:"last_run"`
 	LastOK       bool       `json:"last_ok"`
+	LastSuccess  time.Time  `json:"last_success"`
 }
 
 func Defaults() Settings {
@@ -76,8 +100,10 @@ func Defaults() Settings {
 			InodePercent: 85,
 			DurationMin:  5,
 			CooldownMin:  60,
+			ForecastDays: 7,
 		},
-		Report: Report{Enabled: true, Time: "09:00"},
+		Report:   Report{Enabled: true, Time: "09:00"},
+		Security: Security{FailedLoginThreshold: 100, FileWatch: true, PortWatch: true},
 		Backup: Backup{
 			IntervalDays: 1,
 			Time:         "03:00",
@@ -139,6 +165,9 @@ func (st *Store) Update(fn func(*Settings) error) error {
 func (s Settings) clone() Settings {
 	s.Backup.Paths = append([]string(nil), s.Backup.Paths...)
 	s.Backup.Databases = append([]Database(nil), s.Backup.Databases...)
+	s.Services.Units = append([]string(nil), s.Services.Units...)
+	s.Services.Containers = append([]string(nil), s.Services.Containers...)
+	s.HTTPChecks = append([]HTTPCheck(nil), s.HTTPChecks...)
 	return s
 }
 

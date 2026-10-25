@@ -92,7 +92,7 @@ func init() {
 		"bot.err.percent":         "Foiz 0 dan 100 gacha bo'lishi kerak.",
 		"bot.err.duration":        "Davomiylik 0 dan 1440 daqiqagacha bo'lishi kerak.",
 		"bot.err.cooldown":        "Qayta eslatish oralig'i 1 dan 1440 daqiqagacha bo'lishi kerak.",
-		"bot.err.alert_key":       "Noma'lum sozlama: %s. cpu, mem, disk, inode, duration yoki cooldown ishlating.",
+		"bot.err.alert_key":       "Noma'lum sozlama: %s. cpu, mem, disk, inode, duration, cooldown yoki forecast ishlating.",
 		"bot.err.mute_duration":   "Muddat 1m dan 7d gacha bo'lishi kerak, masalan 30m, 2h, 1d.",
 		"bot.err.path_absolute":   "Yo'l to'liq bo'lishi kerak, masalan /var/www.",
 		"bot.err.path_not_listed": "%s ro'yxatda yo'q.",
@@ -100,13 +100,17 @@ func init() {
 		"bot.err.path_missing":    "%s serverda mavjud emas.",
 		"bot.err.lang":            "Noma'lum til: %s. en, uz yoki ru ishlating.",
 
-		"bot.help.title":         "🛡 <b>vps-alert</b>: server monitoringi va backup",
-		"bot.help.group.monitor": "<b>Monitoring</b>",
-		"bot.help.group.backup":  "<b>Backup</b>",
-		"bot.help.group.bot":     "<b>Bot</b>",
-		"bot.help.footer":        "Istalgan buyruq bo'yicha batafsil izoh va misollar: <code>/help schedule</code>",
-		"bot.help.more":          "📖 <a href=\"%s\">Batafsil hujjatda</a>",
-		"bot.help.unknown":       "Noma'lum buyruq: %s",
+		"bot.help.title":          "🛡 <b>vps-alert</b>: server monitoringi va backup",
+		"bot.help.group.monitor":  "<b>Monitoring</b>",
+		"bot.help.group.backup":   "<b>Backup</b>",
+		"bot.help.group.bot":      "<b>Bot</b>",
+		"bot.help.group.security": "<b>Xavfsizlik</b>",
+		"bot.state.forecast":      "📈 Disk prognozi: disk to'lishidan %d kun oldin ogohlantirish",
+		"bot.state.forecast_off":  "📈 Disk prognozi: o'chiq",
+		"bot.err.forecast":        "Kunlar 0 dan 90 gacha bo'lishi kerak.",
+		"bot.help.footer":         "Istalgan buyruq bo'yicha batafsil izoh va misollar: <code>/help schedule</code>",
+		"bot.help.more":           "📖 <a href=\"%s\">Batafsil hujjatda</a>",
+		"bot.help.unknown":        "Noma'lum buyruq: %s",
 
 		"help.status.short":    "Server holati",
 		"help.alerts.short":    "Alert chegaralari",
@@ -125,12 +129,13 @@ func init() {
 			"<b>Misol</b>\n<code>/status</code>: serverning hozirgi holati",
 		"help.alerts": "Qiymat belgilangan davomiylik davomida chegaradan yuqori tursa alert keladi, yuqoriligicha qolsa har cooldown'da qayta eslatiladi.\n\n" +
 			"<b>Ishlatish</b>\n<code>/alerts &lt;sozlama&gt; &lt;qiymat&gt;</code>\n" +
-			"Sozlamalar: cpu, mem, disk, inode (%% da), duration, cooldown (daqiqada). 0 chegarani o'chiradi.\n\n" +
+			"Sozlamalar: cpu, mem, disk, inode (%% da), duration, cooldown (daqiqada), forecast (disk to'lishidan necha kun oldin). 0 sozlamani o'chiradi.\n\n" +
 			"<b>Misollar</b>\n" +
 			"<code>/alerts cpu 90</code>: CPU 90%% dan oshsa alert\n" +
 			"<code>/alerts disk 80</code>: disk 80%% to'lsa alert\n" +
 			"<code>/alerts duration 10</code>: faqat 10 daqiqa davom etsa\n" +
-			"<code>/alerts mem 0</code>: RAM alertlari o'chiq",
+			"<code>/alerts mem 0</code>: RAM alertlari o'chiq\n" +
+			"<code>/alerts forecast 7</code>: disk 7 kun ichida to'lishi kutilsa ogohlantirish",
 		"help.mute": "Resurs alertlarini vaqtincha o'chiradi, masalan texnik ishlar paytida. Login alertlari va backup hisobotlari kelaveradi.\n\n" +
 			"<b>Ishlatish</b>\n<code>/mute &lt;muddat&gt;</code>: m daqiqa, h soat, d kun, 7d gacha\n\n" +
 			"<b>Misollar</b>\n" +

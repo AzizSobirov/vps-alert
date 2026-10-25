@@ -53,6 +53,23 @@ Only one backup runs at a time. If you press **Backup now** while one is running
 - **⚠️ some files could not be read**: the snapshot was made, but some files were unreadable (usually
   removed while the backup ran).
 
+## Stale backups
+
+A backup that silently stops running is worse than one that fails loudly. While the schedule is
+on, vps-alert checks that a backup has **succeeded** recently: within the schedule interval plus 12
+hours (36 hours for a daily schedule, 7.5 days for a weekly one). If not, you get:
+
+```
+⚠️ No successful backup for 3d 2h on my-server
+Last successful backup: 2026-10-23 03:00
+Check /backup and the logs: journalctl -u vps-alert
+```
+
+- It repeats once a day while the problem lasts, and the next successful backup report says
+  **✅ Backups are working again**.
+- If no backup has ever succeeded, it counts from the first scheduled run.
+- The daily report also shows it. `/mute` silences it; it arrives once the mute ends.
+
 ## Where backups go
 
 | Target | Location |

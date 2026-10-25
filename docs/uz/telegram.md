@@ -73,6 +73,20 @@ uning ustidan yozadi.
 bittasini batafsil va shu hujjatlarga havola bilan tushuntiradi. Argument talab qiladigan buyruq
 argumentsiz yuborilsa, joriy sozlama va misollar ko'rsatiladi.
 
+## Menyu
+
+`/menu` (yoki `/start`) yuboring: har bir bo'lim uchun tugmali menyu chiqadi: holat, jarayonlar,
+backup, bazalar, servislar, saytlar, xavfsizlik, alertlar va til. Bu bitta xabar, tugmalarni
+bosganingizda o'zi o'zgarib boradi, shuning uchun chat to'lib ketmaydi.
+
+Ko'p ishlatiladigan qiymatlar ham tugma: jadval (har kuni, 3 kunda, haftada), tayyor retention
+variantlari, 30m / 2h / 1d ga mute, xavfsizlik kalitlari. Papka yoki sayt manzili kabi yozish kerak
+bo'lgan qiymatlarni bot so'raydi, siz uning savoliga javob berasiz. Shaxsiy chatda javobni shunchaki
+yuboring; guruhda esa savolga Telegram'ning **Reply** (Javob berish) funksiyasi bilan javob bering,
+shunda bot qaysi xabar javob ekanini biladi.
+
+Barcha buyruqlar ham ishlayveradi, qaysi biri tezroq bo'lsa, shuni ishlating.
+
 ## BotFather'da tavsiya etilgan sozlamalar
 
 - Botni guruhingizga qo'shgandan keyin `/setjoingroups` → **Disable** qiling, shunda begonalar uni

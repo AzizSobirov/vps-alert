@@ -92,7 +92,7 @@ func init() {
 		"bot.err.percent":         "Процент должен быть от 0 до 100.",
 		"bot.err.duration":        "Длительность должна быть от 0 до 1440 минут.",
 		"bot.err.cooldown":        "Интервал повтора должен быть от 1 до 1440 минут.",
-		"bot.err.alert_key":       "Неизвестный параметр %s. Используйте cpu, mem, disk, inode, duration или cooldown.",
+		"bot.err.alert_key":       "Неизвестный параметр %s. Используйте cpu, mem, disk, inode, duration, cooldown или forecast.",
 		"bot.err.mute_duration":   "Срок должен быть от 1m до 7d, например 30m, 2h, 1d.",
 		"bot.err.path_absolute":   "Путь должен быть абсолютным, например /var/www.",
 		"bot.err.path_not_listed": "%s нет в списке.",
@@ -100,13 +100,17 @@ func init() {
 		"bot.err.path_missing":    "%s не существует на сервере.",
 		"bot.err.lang":            "Неизвестный язык %s. Используйте en, uz или ru.",
 
-		"bot.help.title":         "🛡 <b>vps-alert</b>: мониторинг сервера и бэкапы",
-		"bot.help.group.monitor": "<b>Мониторинг</b>",
-		"bot.help.group.backup":  "<b>Бэкапы</b>",
-		"bot.help.group.bot":     "<b>Бот</b>",
-		"bot.help.footer":        "Подробности и примеры по любой команде: <code>/help schedule</code>",
-		"bot.help.more":          "📖 <a href=\"%s\">Подробнее в документации</a>",
-		"bot.help.unknown":       "Неизвестная команда: %s",
+		"bot.help.title":          "🛡 <b>vps-alert</b>: мониторинг сервера и бэкапы",
+		"bot.help.group.monitor":  "<b>Мониторинг</b>",
+		"bot.help.group.backup":   "<b>Бэкапы</b>",
+		"bot.help.group.bot":      "<b>Бот</b>",
+		"bot.help.group.security": "<b>Безопасность</b>",
+		"bot.state.forecast":      "📈 Прогноз диска: предупреждать за %d дн. до заполнения",
+		"bot.state.forecast_off":  "📈 Прогноз диска: выключен",
+		"bot.err.forecast":        "Дней должно быть от 0 до 90.",
+		"bot.help.footer":         "Подробности и примеры по любой команде: <code>/help schedule</code>",
+		"bot.help.more":           "📖 <a href=\"%s\">Подробнее в документации</a>",
+		"bot.help.unknown":        "Неизвестная команда: %s",
 
 		"help.status.short":    "Состояние сервера",
 		"help.alerts.short":    "Пороги оповещений",
@@ -125,12 +129,13 @@ func init() {
 			"<b>Пример</b>\n<code>/status</code>: текущее состояние сервера",
 		"help.alerts": "Оповещение приходит, когда значение держится выше порога заданное время, и повторяется каждый cooldown, пока остаётся высоким.\n\n" +
 			"<b>Использование</b>\n<code>/alerts &lt;параметр&gt; &lt;значение&gt;</code>\n" +
-			"Параметры: cpu, mem, disk, inode (в %%), duration, cooldown (в минутах). 0 выключает порог.\n\n" +
+			"Параметры: cpu, mem, disk, inode (в %%), duration, cooldown (в минутах), forecast (за сколько дней до заполнения диска). 0 выключает параметр.\n\n" +
 			"<b>Примеры</b>\n" +
 			"<code>/alerts cpu 90</code>: оповещать, когда CPU выше 90%%\n" +
 			"<code>/alerts disk 80</code>: оповещать, когда диск заполнен на 80%%\n" +
 			"<code>/alerts duration 10</code>: только если длится 10 минут\n" +
-			"<code>/alerts mem 0</code>: без оповещений о RAM",
+			"<code>/alerts mem 0</code>: без оповещений о RAM\n" +
+			"<code>/alerts forecast 7</code>: предупредить, если диск заполнится в течение 7 дней",
 		"help.mute": "Временно выключает оповещения о ресурсах, например на время работ. Оповещения о входе и отчёты о бэкапах продолжают приходить.\n\n" +
 			"<b>Использование</b>\n<code>/mute &lt;срок&gt;</code>: m минуты, h часы, d дни, до 7d\n\n" +
 			"<b>Примеры</b>\n" +

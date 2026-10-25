@@ -17,11 +17,15 @@ import (
 	"github.com/AzizSobirov/vps-alert/internal/backup"
 	"github.com/AzizSobirov/vps-alert/internal/bot"
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/filewatch"
+	"github.com/AzizSobirov/vps-alert/internal/httpcheck"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/loginhook"
 	"github.com/AzizSobirov/vps-alert/internal/monitor"
 	"github.com/AzizSobirov/vps-alert/internal/restore"
+	"github.com/AzizSobirov/vps-alert/internal/services"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
+	"github.com/AzizSobirov/vps-alert/internal/sshwatch"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
 
@@ -142,8 +146,12 @@ func run(cfg *config.Config) error {
 
 	tasks := []func(context.Context){
 		(&bot.Bot{Cfg: cfg, TG: tg, Store: store, Backup: backups}).Run,
-		(&monitor.Monitor{Server: cfg.ServerName, Store: store, Notify: notify, DefaultLang: cfg.Language}).Run,
+		(&monitor.Monitor{Server: cfg.ServerName, Store: store, Notify: notify, DefaultLang: cfg.Language, DataDir: cfg.DataDir}).Run,
 		backups.Schedule,
+		(&services.Watcher{Cfg: cfg, Store: store, Notify: notify}).Run,
+		(&httpcheck.Watcher{Cfg: cfg, Store: store, Notify: notify}).Run,
+		(&sshwatch.Watcher{Cfg: cfg, Store: store, Notify: notify}).Run,
+		(&filewatch.Watcher{Cfg: cfg, Store: store, Notify: notify}).Run,
 	}
 	if cfg.HeartbeatURL != "" {
 		tasks = append(tasks, func(ctx context.Context) { heartbeat(ctx, cfg.HeartbeatURL, cfg.HeartbeatInterval) })

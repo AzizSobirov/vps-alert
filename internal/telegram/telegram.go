@@ -51,6 +51,8 @@ type Message struct {
 	Chat      Chat   `json:"chat"`
 	Date      int64  `json:"date"`
 	Text      string `json:"text"`
+
+	ReplyToMessage *Message `json:"reply_to_message"`
 }
 
 type CallbackQuery struct {
@@ -171,6 +173,20 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, kb 
 	}
 	var m Message
 	err := c.call(ctx, "sendMessage", params, &m)
+	return &m, err
+}
+
+// AskReply sends text with a force-reply markup, so the user's answer comes
+// back as a reply to it. Replies to the bot's own messages reach it even in
+// groups with privacy mode on.
+func (c *Client) AskReply(ctx context.Context, chatID int64, text string) (*Message, error) {
+	var m Message
+	err := c.call(ctx, "sendMessage", map[string]any{
+		"chat_id":      chatID,
+		"text":         text,
+		"parse_mode":   "HTML",
+		"reply_markup": map[string]any{"force_reply": true, "selective": true},
+	}, &m)
 	return &m, err
 }
 

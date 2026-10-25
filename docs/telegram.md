@@ -68,6 +68,19 @@ with `LANGUAGE=uz` (or `en`, `ru`) in the env file; `/lang` overrides it.
 one in detail with a link to these docs. A command that needs arguments, sent without them, shows
 its current setting and examples.
 
+## Menu
+
+Send `/menu` (or `/start`) to get a menu with buttons for every section: status, top processes,
+backups, databases, services, websites, security, alerts and language. It is one message that
+changes in place as you tap, so the chat does not fill up.
+
+Common values are buttons too: schedule (daily, every 3 days, weekly), retention presets, mute for
+30m / 2h / 1d, security switches. For values you have to type, like a folder or a website address,
+the bot asks and you reply to its question. In a private chat just send the answer; in a group,
+use Telegram's **Reply** on the question, so the bot knows which message is the answer.
+
+Every command keeps working, so you can use whichever is quicker.
+
 ## Recommended BotFather settings
 
 - `/setjoingroups` → **Disable** after adding the bot to your group, so strangers cannot add it to

@@ -1,6 +1,6 @@
 # vps-alert documentation
 
-🇺🇿 [O'zbekcha](uz/README.md)
+🇺🇿 [O'zbekcha](uz/README.md) · 🇷🇺 [Русский](ru/README.md)
 
 Start with the [installation guide](../README.md#installation) in the main README. These pages explain
 how each part works in more detail.
@@ -15,3 +15,5 @@ how each part works in more detail.
 | [Restoring](restore.md) | Getting files and databases back, with or without vps-alert |
 | [Backup password](backup-password.md) | What `RESTIC_PASSWORD` does, keeping it safe, changing it |
 | [Heartbeat](heartbeat.md) | Getting alerted when the whole server is down |
+| [Services and websites](services.md) | Alerts when a systemd service, Docker container or website goes down |
+| [Security](security.md) | Failed SSH logins, important file changes, new open ports |

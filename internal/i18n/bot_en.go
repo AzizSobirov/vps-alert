@@ -95,7 +95,7 @@ func init() {
 		"bot.err.percent":         "Percent must be from 0 to 100.",
 		"bot.err.duration":        "Duration must be from 0 to 1440 minutes.",
 		"bot.err.cooldown":        "Cooldown must be from 1 to 1440 minutes.",
-		"bot.err.alert_key":       "Unknown setting %s. Use cpu, mem, disk, inode, duration or cooldown.",
+		"bot.err.alert_key":       "Unknown setting %s. Use cpu, mem, disk, inode, duration, cooldown or forecast.",
 		"bot.err.mute_duration":   "Duration must be from 1m to 7d, e.g. 30m, 2h, 1d.",
 		"bot.err.path_absolute":   "The path must be absolute, e.g. /var/www.",
 		"bot.err.path_not_listed": "%s is not in the list.",
@@ -103,13 +103,17 @@ func init() {
 		"bot.err.path_missing":    "%s does not exist on the server.",
 		"bot.err.lang":            "Unknown language %s. Use en, uz or ru.",
 
-		"bot.help.title":         "🛡 <b>vps-alert</b>: server monitoring and backups",
-		"bot.help.group.monitor": "<b>Monitoring</b>",
-		"bot.help.group.backup":  "<b>Backups</b>",
-		"bot.help.group.bot":     "<b>Bot</b>",
-		"bot.help.footer":        "Details and examples for any command: <code>/help schedule</code>",
-		"bot.help.more":          "📖 <a href=\"%s\">More in the documentation</a>",
-		"bot.help.unknown":       "Unknown command: %s",
+		"bot.help.title":          "🛡 <b>vps-alert</b>: server monitoring and backups",
+		"bot.help.group.monitor":  "<b>Monitoring</b>",
+		"bot.help.group.backup":   "<b>Backups</b>",
+		"bot.help.group.bot":      "<b>Bot</b>",
+		"bot.help.group.security": "<b>Security</b>",
+		"bot.state.forecast":      "📈 Disk forecast: warn %d days before a disk is full",
+		"bot.state.forecast_off":  "📈 Disk forecast: off",
+		"bot.err.forecast":        "Days must be between 0 and 90.",
+		"bot.help.footer":         "Details and examples for any command: <code>/help schedule</code>",
+		"bot.help.more":           "📖 <a href=\"%s\">More in the documentation</a>",
+		"bot.help.unknown":        "Unknown command: %s",
 
 		"help.status.short":    "Server status",
 		"help.alerts.short":    "Alert thresholds",
@@ -128,12 +132,13 @@ func init() {
 			"<b>Example</b>\n<code>/status</code>: current server status",
 		"help.alerts": "An alert is sent when a value stays above its threshold for the set duration, and repeated every cooldown while it stays high.\n\n" +
 			"<b>Usage</b>\n<code>/alerts &lt;setting&gt; &lt;value&gt;</code>\n" +
-			"Settings: cpu, mem, disk, inode (in %%), duration, cooldown (in minutes). 0 turns a threshold off.\n\n" +
+			"Settings: cpu, mem, disk, inode (in %%), duration, cooldown (in minutes), forecast (days before a disk fills up). 0 turns a setting off.\n\n" +
 			"<b>Examples</b>\n" +
 			"<code>/alerts cpu 90</code>: alert when CPU is above 90%%\n" +
 			"<code>/alerts disk 80</code>: alert when a disk is 80%% full\n" +
 			"<code>/alerts duration 10</code>: only if it lasts 10 minutes\n" +
-			"<code>/alerts mem 0</code>: no RAM alerts",
+			"<code>/alerts mem 0</code>: no RAM alerts\n" +
+			"<code>/alerts forecast 7</code>: warn when a disk will be full within 7 days",
 		"help.mute": "Silences resource alerts for a while, e.g. during maintenance. Login alerts and backup reports still arrive.\n\n" +
 			"<b>Usage</b>\n<code>/mute &lt;duration&gt;</code>: m minutes, h hours, d days, up to 7d\n\n" +
 			"<b>Examples</b>\n" +

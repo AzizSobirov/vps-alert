@@ -12,6 +12,7 @@ vps-alert samples CPU, RAM, disk usage and inode usage every 30 seconds.
 | Inodes | 85% | `/alerts inode 85` |
 | Must last | 5 minutes | `/alerts duration 5` |
 | Repeat every | 60 minutes | `/alerts cooldown 60` |
+| Disk forecast | 7 days | `/alerts forecast 7` |
 
 Send `/alerts` to see the current values. Setting a threshold to `0` disables it.
 
@@ -31,14 +32,51 @@ snap images) are skipped.
 space, typically because of millions of small cache or session files. Nothing can then be written, so
 it is checked like disk space.
 
+When a CPU or RAM alert fires, it lists the top 3 processes for that resource, so you can see the
+cause without logging in:
+
+```
+🔴 CPU: 97% (threshold 90%)
+
+Top CPU:
+  • php-fpm (PID 2214): 182%
+  • mysqld (PID 911): 64%
+  • node (PID 3051): 12%
+```
+
+## Disk forecast
+
+A threshold alert says the disk *is* full. The forecast warns days earlier, while there is still
+time to clean up or resize.
+
+Every 10 minutes vps-alert records how much space each disk uses and keeps a week of history in
+`/var/lib/vps-alert/disk-history.json`. It fits a straight line through the last 3 days and, if
+usage is clearly growing, estimates when the disk will be full:
+
+```
+📈 Disk / is filling up: 81% now, full in ~4 days (+3.2 GiB/day)
+```
+
+- The alert is sent when the estimate is within `/alerts forecast` days (default 7), at most once a
+  day per disk. `/alerts forecast 0` turns it off.
+- It needs at least 6 hours of history, so nothing appears right after installation.
+- Flat or shrinking usage, and growth under 1 MiB a day, never alert.
+- The daily report lists every disk expected to be full within 30 days.
+
+## Top processes
+
+`/top` shows the 10 processes using the most CPU, measured over one second, and the 10 using the
+most memory. CPU% is per core, as in `top`: a busy program on 4 cores can show 400%.
+
 ## Muting
 
 ```
 /mute 30m      /mute 2h      /mute 1d      /unmute
 ```
 
-Muting silences resource alerts for up to 7 days, for example during maintenance. Login alerts,
-backup reports and the daily report are not muted. `/status` shows when a mute ends.
+Muting silences resource alerts, disk forecasts and stale-backup alerts for up to 7 days, for example
+during maintenance. Login alerts, backup reports and the daily report are not muted. `/status` shows
+when a mute ends.
 
 ## Login alerts
 
@@ -68,7 +106,7 @@ LOGIN_IP_WHITELIST=203.0.113.7,198.51.100.0/24
 
 To turn login alerts off, remove the `vps-alert` line from `/etc/pam.d/sshd`.
 
-Failed login attempts are not reported yet.
+Failed login attempts (brute force) are covered in [security](security.md#failed-ssh-logins).
 
 ## Daily report
 

@@ -57,6 +57,23 @@ aytadi.
 - **⚠️ some files could not be read**: snapshot yaratildi, lekin ba'zi fayllarni o'qib bo'lmadi
   (odatda backup paytida o'chirilgan fayllar).
 
+## Eskirgan backuplar
+
+Jim to'xtab qolgan backup ochiq xato bergan backupdan yomonroq. Jadval yoqilgan bo'lsa, vps-alert
+yaqinda backup **muvaffaqiyatli** olinganini tekshiradi: jadval oralig'i plus 12 soat ichida
+(kunlik jadval uchun 36 soat, haftalik uchun 7,5 kun). Olinmagan bo'lsa, shunday xabar keladi:
+
+```
+⚠️ 3d 2h davomida muvaffaqiyatli backup yo'q: my-server
+Oxirgi muvaffaqiyatli backup: 2026-10-23 03:00
+/backup va loglarni tekshiring: journalctl -u vps-alert
+```
+
+- Muammo davom etsa, kuniga bir marta takrorlanadi. Keyingi muvaffaqiyatli backup hisobotida
+  **✅ Backuplar yana ishlayapti** deb yoziladi.
+- Hali bitta ham backup muvaffaqiyatli olinmagan bo'lsa, birinchi rejadagi backup vaqtidan hisoblanadi.
+- Kunlik hisobotda ham ko'rsatiladi. `/mute` uni o'chirib turadi, mute tugagach xabar keladi.
+
 ## Backuplar qayerga boradi
 
 | Target | Joy |

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,6 +47,9 @@ type Manager struct {
 	Notify *telegram.Notifier
 
 	running atomic.Bool
+
+	healthMu sync.Mutex
+	health   *health // stale-alert state, see stale.go
 }
 
 type Result struct {
@@ -120,12 +124,20 @@ func (m *Manager) Run(ctx context.Context, reason string) error {
 	}
 	if uerr := m.Store.Update(func(s *settings.Settings) error {
 		s.Backup.LastRun, s.Backup.LastOK = start, ok
+		if ok {
+			s.Backup.LastSuccess = start
+		}
 		return nil
 	}); uerr != nil {
 		log.Printf("backup: save status: %v", uerr)
 	}
 
-	m.Notify.Send(ctx, m.format(m.Lang(), reason, dumps, results, err, time.Since(start)))
+	l := m.Lang()
+	report := m.format(l, reason, dumps, results, err, time.Since(start))
+	if ok {
+		report += m.resolveStale(l)
+	}
+	m.Notify.Send(ctx, report)
 	if !ok {
 		return errors.New("backup failed")
 	}
@@ -252,6 +264,7 @@ func (m *Manager) Schedule(ctx context.Context) {
 		case <-t.C:
 		}
 		now := time.Now()
+		m.checkStale(ctx, now)
 		cfg := m.Store.Get().Backup
 		if !cfg.Enabled || cfg.NextRun.IsZero() || now.Before(cfg.NextRun) {
 			continue

@@ -31,7 +31,7 @@ func TestEvaluateLifecycle(t *testing.T) {
 		{71 * time.Minute, 50, ""},
 	}
 	for _, s := range steps {
-		msgs := m.evaluate(cpu(s.cpu), a, t0.Add(s.at), i18n.EN)
+		msgs, _ := m.evaluate(cpu(s.cpu), a, t0.Add(s.at), i18n.EN)
 		if s.want == "" && len(msgs) != 0 {
 			t.Errorf("at %v: unexpected %v", s.at, msgs)
 		}
@@ -47,7 +47,7 @@ func TestEvaluateDipResetsPending(t *testing.T) {
 	t0 := time.Now()
 	m.evaluate(metrics.Snapshot{CPUPercent: 95}, a, t0, i18n.EN)
 	m.evaluate(metrics.Snapshot{CPUPercent: 87}, a, t0.Add(2*time.Minute), i18n.EN)
-	if msgs := m.evaluate(metrics.Snapshot{CPUPercent: 95}, a, t0.Add(6*time.Minute), i18n.EN); len(msgs) != 0 {
+	if msgs, _ := m.evaluate(metrics.Snapshot{CPUPercent: 95}, a, t0.Add(6*time.Minute), i18n.EN); len(msgs) != 0 {
 		t.Errorf("fired although the value dipped: %v", msgs)
 	}
 }
@@ -56,7 +56,7 @@ func TestEvaluateTranslates(t *testing.T) {
 	a := settings.Alerts{DiskPercent: 85, DurationMin: 0, CooldownMin: 60}
 	s := metrics.Snapshot{Disks: []metrics.Disk{{Mount: "/", Percent: 95}}}
 	for l, want := range map[i18n.Lang]string{i18n.EN: "threshold", i18n.UZ: "chegara", i18n.RU: "Диск /"} {
-		msgs := (&Monitor{}).evaluate(s, a, time.Now(), l)
+		msgs, _ := (&Monitor{}).evaluate(s, a, time.Now(), l)
 		if len(msgs) != 1 || !strings.Contains(msgs[0], want) {
 			t.Errorf("%s: got %v, want %q", l, msgs, want)
 		}

@@ -96,13 +96,12 @@ func (l Lang) Label() string {
 
 const docsBase = "https://github.com/AzizSobirov/vps-alert/blob/main/docs/"
 
-// DocURL links to a documentation page, e.g. "restore.md", in l when that
-// translation exists and in English otherwise.
+// DocURL links to a documentation page, e.g. "restore.md", in l.
 func DocURL(l Lang, page string) string {
-	if l == UZ {
-		return docsBase + "uz/" + page
+	if l == EN {
+		return docsBase + page
 	}
-	return docsBase + page
+	return docsBase + string(l) + "/" + page
 }
 
 // Error is an error whose message is translated when shown to the user.

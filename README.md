@@ -10,11 +10,15 @@ One static binary, no open ports, no dashboard to host.
 - 💾 **Backups**: encrypted, deduplicated snapshots with [restic](https://restic.net) to a local repository, Cloudflare R2, or both
 - 📅 **Scheduling from the bot**: interval, time, paths and retention, all from chat
 - 🛡 **Locked to one chat**: the chat ID (and optionally user IDs) come from the env file only; everyone else is ignored and reported
+- 📈 **Disk forecast**: a warning days before a disk fills up, and the top processes in every CPU/RAM alert
+- ⚙️ **Services and websites**: alerts when a systemd service or Docker container stops or keeps restarting, and when a website is down or slow
+- 🛡 **Security**: SSH brute-force summaries, changes to users, sudo, SSH keys and cron, and newly opened ports
+- 🧭 **Menu with buttons** in English, O'zbekcha and Русский; every action is also a command with examples in `/help`
 - 💓 **Dead man's switch**: optional heartbeat to healthchecks.io or Uptime Kuma, so a dead server still gets noticed
 
 📖 **[Documentation](docs/README.md)**: how alerts, backups, schedules, retention, databases and restores work.
 
-🇺🇿 **[Hujjatlar o'zbek tilida](docs/uz/README.md)**
+🇺🇿 **[Hujjatlar o'zbek tilida](docs/uz/README.md)** · 🇷🇺 **[Документация на русском](docs/ru/README.md)**
 
 ## Installation
 
@@ -217,12 +221,21 @@ them.
 
 ## Commands
 
+The easiest way is `/menu`: buttons for everything below. The commands:
+
 | Command | |
 |---|---|
+| `/menu` | Menu with buttons for every section |
 | `/status` | Current CPU, RAM, disk, uptime |
-| `/alerts` | Show thresholds; `/alerts cpu 90`, `/alerts disk 85`, `/alerts duration 5`, `/alerts cooldown 60` (0 disables a threshold) |
+| `/top` | Processes using the most CPU and memory |
+| `/alerts` | Show thresholds; `/alerts cpu 90`, `/alerts disk 85`, `/alerts duration 5`, `/alerts cooldown 60`, `/alerts forecast 7` (0 disables) |
 | `/mute 1h`, `/unmute` | Silence alerts (`30m`, `2h`, `1d`) |
 | `/report 09:00`, `/report off` | Daily report time |
+| `/services` | Choose systemd services and Docker containers to watch |
+| `/http add https://example.com`, `/http rm ...` | Websites to check every minute |
+| `/ssh`, `/ssh threshold 50`, `/ssh off` | Failed SSH logins in the last 24h; brute-force alert threshold |
+| `/files`, `/files off` | Watching important files (users, sudo, SSH keys, cron) |
+| `/ports`, `/ports off` | Listening ports; alerts on new ones |
 | `/backup` | Menu: run now, list snapshots, choose target, schedule |
 | `/db` | Find databases and choose which to back up |
 | `/paths add /var/www`, `/paths rm /var/www` | Paths to back up |

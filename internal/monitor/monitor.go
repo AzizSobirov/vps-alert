@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AzizSobirov/vps-alert/internal/backup"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
@@ -26,8 +27,14 @@ type Monitor struct {
 	Notify      *telegram.Notifier
 	Interval    time.Duration
 	DefaultLang string // LANGUAGE from the env file; the /lang setting wins
+	DataDir     string // where the disk usage history for forecasts is kept
 
-	states map[string]*state
+	states     map[string]*state
+	history    *diskHistory
+	lastSample time.Time
+
+	// topProcesses is metrics.TopProcesses, replaceable in tests.
+	topProcesses func(ctx context.Context, n int) (byCPU, byMem []metrics.Process, err error)
 }
 
 type state struct {
@@ -57,7 +64,15 @@ func (m *Monitor) Run(ctx context.Context) {
 			now := time.Now()
 			cfg := m.Store.Get()
 			l := i18n.Pick(cfg.Language, m.DefaultLang)
-			if msgs := m.evaluate(snap, cfg.Alerts, now, l); len(msgs) > 0 && !now.Before(cfg.MutedUntil) {
+			muted := now.Before(cfg.MutedUntil)
+			msgs, fired := m.evaluate(snap, cfg.Alerts, now, l)
+			if m.record(snap, now) {
+				msgs = append(msgs, m.forecastAlerts(snap, cfg.Alerts.ForecastDays, now, l, muted)...)
+			}
+			if len(msgs) > 0 && !muted {
+				if top := m.topBlock(ctx, fired, l); top != "" {
+					msgs = append(msgs, top)
+				}
 				m.Notify.Send(ctx, fmt.Sprintf("🖥 <b>%s</b>\n\n%s", html.EscapeString(m.Server), strings.Join(msgs, "\n")))
 			}
 			m.maybeReport(ctx, snap, now, l)
@@ -85,15 +100,15 @@ func readings(s metrics.Snapshot, a settings.Alerts, l i18n.Lang) []reading {
 }
 
 // evaluate updates alert state with a new snapshot and returns the alert
-// lines that should be sent now, in l.
-func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time, l i18n.Lang) []string {
+// lines that should be sent now, in l, and the keys of the alerts that just
+// fired.
+func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time, l i18n.Lang) (msgs, fired []string) {
 	if m.states == nil {
 		m.states = map[string]*state{}
 	}
 	duration := time.Duration(a.DurationMin) * time.Minute
 	cooldown := time.Duration(a.CooldownMin) * time.Minute
 
-	var msgs []string
 	for _, r := range readings(s, a, l) {
 		if r.threshold <= 0 {
 			continue
@@ -113,6 +128,7 @@ func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time,
 			if !st.firing && now.Sub(st.since) >= duration {
 				st.firing, st.lastSent = true, now
 				msgs = append(msgs, i18n.T(l, "monitor.fired", label, r.value, r.threshold))
+				fired = append(fired, r.key)
 			} else if st.firing && now.Sub(st.lastSent) >= cooldown {
 				st.lastSent = now
 				msgs = append(msgs, i18n.T(l, "monitor.still_high",
@@ -131,7 +147,42 @@ func (m *Monitor) evaluate(s metrics.Snapshot, a settings.Alerts, now time.Time,
 			}
 		}
 	}
-	return msgs
+	return msgs, fired
+}
+
+// topBlock lists the top processes for a CPU or RAM alert that just fired,
+// so the cause is visible without logging in.
+func (m *Monitor) topBlock(ctx context.Context, fired []string, l i18n.Lang) string {
+	var cpu, ram bool
+	for _, k := range fired {
+		cpu, ram = cpu || k == "cpu", ram || k == "mem"
+	}
+	if !cpu && !ram {
+		return ""
+	}
+	top := m.topProcesses
+	if top == nil {
+		top = metrics.TopProcesses
+	}
+	byCPU, byMem, err := top(ctx, 3)
+	if err != nil {
+		log.Printf("monitor: top processes: %v", err)
+		return ""
+	}
+	var b strings.Builder
+	if cpu && len(byCPU) > 0 {
+		b.WriteString("\n" + i18n.T(l, "monitor.top.cpu"))
+		for _, p := range byCPU {
+			b.WriteString("\n" + i18n.T(l, "monitor.top.line_cpu", html.EscapeString(p.Name), p.PID, p.CPUPercent))
+		}
+	}
+	if ram && len(byMem) > 0 {
+		b.WriteString("\n" + i18n.T(l, "monitor.top.mem"))
+		for _, p := range byMem {
+			b.WriteString("\n" + i18n.T(l, "monitor.top.line_mem", html.EscapeString(p.Name), p.PID, p.MemPercent, metrics.Bytes(p.RSS)))
+		}
+	}
+	return b.String()
 }
 
 func (m *Monitor) maybeReport(ctx context.Context, snap metrics.Snapshot, now time.Time, l i18n.Lang) {
@@ -161,8 +212,14 @@ func (m *Monitor) maybeReport(ctx context.Context, snap metrics.Snapshot, now ti
 	default:
 		b.WriteString(i18n.T(l, "monitor.report.backup_failed", bk.LastRun.Format("2006-01-02 15:04")))
 	}
+	if age, stale := backup.StaleFor(bk, now); stale {
+		b.WriteString("\n" + i18n.T(l, "monitor.report.backup_stale", metrics.FormatDuration(age)))
+	}
 	if bk.Enabled {
 		b.WriteString("\n" + i18n.T(l, "monitor.report.next_backup", bk.NextRun.Format("2006-01-02 15:04")))
+	}
+	if lines := m.forecastReport(snap, now, l); len(lines) > 0 {
+		b.WriteString("\n\n" + strings.Join(lines, "\n"))
 	}
 	m.Notify.Send(ctx, b.String())
 }
