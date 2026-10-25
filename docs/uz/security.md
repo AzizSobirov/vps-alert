@@ -47,6 +47,56 @@ yoki parollar kuchli bo'lsa, ular zararsiz. Alert odatiy fon uchun emas, g'ayrio
 uchun. Bir xil IP'lar qayta-qayta chiqsa, [fail2ban](https://github.com/fail2ban/fail2ban) o'rnatish
 yoki SSH'ni faqat o'z IP'laringizdan ochish haqida o'ylab ko'ring.
 
+## Muvaffaqiyatli kirishlar va SSH sozlamalari
+
+`/ssh` oxirgi 24 soatdagi **muvaffaqiyatli** kirishlarni ham ko'rsatadi: foydalanuvchi, manzil, usul
+va vaqt. Shuningdek, sshd parol va root bilan kirishga ruxsat beradimi, shuni ham ko'rsatadi:
+
+```
+✅ Oxirgi 24 soatdagi muvaffaqiyatli SSH kirishlar: 2
+  aziz · 92.63.204.12 · kalit · 14:02
+  root · 10.0.0.5 · parol ⚠️ · 03:40
+
+⚙️ SSH sozlamalari
+Parol bilan kirish: ruxsat etilgan ⚠️
+Root kirishi: ruxsat etilgan, parol bilan ham ⚠️
+```
+
+Sozlamalar `sshd -T` dan olinadi, shuning uchun standart qiymatlar va `sshd_config.d/` dagi fayllar
+ham hisobga olinadi.
+
+Bunga ikkita alert qo'shilgan, `/mute` ularning hech birini o'chirmaydi:
+
+- **Yangi manzildan birinchi kirish.** Manzil oldin hech qachon kirmagan bo'lsa, odatdagi 🔐 login
+  xabariga 🆕 qatori qo'shiladi. Birinchi ishga tushishda vps-alert oxirgi 30 kunlik loglardan sizning
+  odatiy manzillaringizni o'rganib oladi, ular belgilanmaydi. Ro'yxat
+  `/var/lib/vps-alert/known-ips.json` da saqlanadi.
+- **Parol bilan kirish.** Kimdir kalit o'rniga parol bilan kirsa, bir daqiqa ichida ⚠️ alert keladi.
+  Parolni ataylab ishlatsangiz, `/ssh password off` bilan o'chiring.
+
+### Faqat kalit bilan kirish
+
+Har kuni minglab botlar parollarni sinab ko'radi. Parol bilan kirish o'chirilsa, ular umuman kira
+olmaydi va muvaffaqiyatsiz urinishlar soni deyarli nolga tushadi.
+
+1. SSH kalit bilan kira olishingizni tekshiring. O'z kompyuteringizda: `ssh-copy-id user@server-ip`,
+   keyin `ssh user@server-ip` parol so'ramasdan kirishi kerak.
+2. **Joriy SSH oynasini yopmang**, xato bo'lsa, undan qaytarasiz.
+3. Serverda:
+
+   ```sh
+   printf "PasswordAuthentication no\nPermitRootLogin prohibit-password\n" | sudo tee /etc/ssh/sshd_config.d/10-keys-only.conf
+   sudo sshd -t && sudo systemctl restart ssh
+   ```
+
+   RHEL asosidagi tizimlarda servis nomi `sshd`.
+4. **Yangi** terminalda qayta kiring. Kirsa, ish tugadi: `/ssh` endi ikkala sozlamani ✅ deb
+   ko'rsatadi. Kira olmasangiz, ochiq qolgan oynadan faylni o'chiring va ssh'ni qayta ishga tushiring.
+
+Ba'zi bulut image'larida `PasswordAuthentication yes` alohida faylda yozilgan bo'ladi, masalan
+`/etc/ssh/sshd_config.d/50-cloud-init.conf`. Fayllar nomi bo'yicha tartibda o'qiladi va birinchi
+qiymat ustun turadi, shuning uchun yuqoridagi fayl nomi `10-` bilan boshlanadi.
+
 ## Muhim fayllar
 
 Bu fayllar har daqiqada tekshiriladi:

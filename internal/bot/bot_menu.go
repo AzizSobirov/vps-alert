@@ -146,6 +146,8 @@ func (b *Bot) menuCallback(ctx context.Context, l i18n.Lang, q *telegram.Callbac
 				} else {
 					s.Security.FailedLoginThreshold = defaultFailedLoginThreshold
 				}
+			case "pwlogin":
+				s.Security.PasswordLoginAlert = !s.Security.PasswordLoginAlert
 			case "files":
 				s.Security.FileWatch = !s.Security.FileWatch
 			case "ports":
@@ -241,6 +243,7 @@ func (b *Bot) securityScreen(ctx context.Context, l i18n.Lang, msgID int64) {
 	kb := &telegram.Keyboard{InlineKeyboard: [][]telegram.Button{
 		{btn(i18n.T(l, "menu.btn.ssh"), "m:ssh"), btn(i18n.T(l, "menu.btn.ports"), "m:ports")},
 		{btn(onOff(sec.FailedLoginThreshold > 0)+" "+i18n.T(l, "menu.btn.tog_ssh"), "m:tog:ssh")},
+		{btn(onOff(sec.PasswordLoginAlert)+" "+i18n.T(l, "menu.btn.tog_pwlogin"), "m:tog:pwlogin")},
 		{btn(onOff(sec.FileWatch)+" "+i18n.T(l, "menu.btn.tog_files"), "m:tog:files")},
 		{btn(onOff(sec.PortWatch)+" "+i18n.T(l, "menu.btn.tog_ports"), "m:tog:ports")},
 		{btn(i18n.T(l, "menu.btn.ssh_threshold"), "m:ask:sshthr")},

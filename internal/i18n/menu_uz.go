@@ -2,6 +2,7 @@ package i18n
 
 func init() {
 	register(UZ, map[string]string{
+		"menu.btn.tog_pwlogin":   "Parol bilan kirish alertlari",
 		"menu.title":             "🖥 <b>%s</b>",
 		"menu.backup_never":      "💾 Hali backup olinmagan",
 		"menu.backup_ok":         "💾 Oxirgi backup: ✅ %s",

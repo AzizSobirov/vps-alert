@@ -2,6 +2,7 @@ package i18n
 
 func init() {
 	register(RU, map[string]string{
+		"login.new_ip":      "🆕 <b>Первый вход с этого IP-адреса</b>. Если это были не вы, действуйте немедленно.",
 		"metrics.os_uptime": "<i>%s</i>, аптайм %s",
 		"metrics.cpu":       "%s CPU: <b>%.0f%%</b> (ядер: %d, нагрузка %.2f / %.2f / %.2f)",
 		"metrics.ram":       "%s RAM: <b>%.0f%%</b> (%s / %s)",

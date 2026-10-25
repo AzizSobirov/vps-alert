@@ -77,7 +77,8 @@ func TestAggregateCountsEachAttemptOnce(t *testing.T) {
 1761400005 web sshd[1]: Connection closed by authenticating user root 203.0.113.7 port 50000 [preauth]
 1761400006 web sshd[1]: Connection closed by authenticating user root 198.51.100.4 port 6000 [preauth]
 1761399000 web sshd[1]: Failed password for root from 192.0.2.1 port 1 ssh2`
-	st := Aggregate(parseAll(strings.NewReader(log), now), time.Unix(1761400000, 0))
+	events, _ := parseAll(strings.NewReader(log), now)
+	st := Aggregate(events, time.Unix(1761400000, 0))
 
 	// admin once, root twice (two passwords), the key-only connection once;
 	// the line before the window is ignored.
@@ -124,5 +125,44 @@ func TestFormat(t *testing.T) {
 	out := FormatTop(i18n.EN, Stats{Total: 3, IPs: []Count{{"1.2.3.4", 3}}, Users: []Count{{"<script>", 3}}})
 	if !strings.Contains(out, "<code>1.2.3.4</code>: 3") || strings.Contains(out, "<script>") {
 		t.Errorf("FormatTop = %q", out)
+	}
+}
+
+func TestParseAccepted(t *testing.T) {
+	now := time.Unix(1761400100, 0)
+	log := `1761400001 web sshd[9]: Accepted publickey for aziz from 92.63.204.12 port 51234 ssh2: ED25519 SHA256:abc
+1761400002 web sshd-session[9]: Accepted password for root from 10.0.0.5 port 4000 ssh2
+1761400003 web sshd[9]: Accepted keyboard-interactive/pam for deploy from 2001:db8::1 port 22 ssh2
+1761400004 web sshd[9]: Failed password for root from 203.0.113.7 port 50000 ssh2`
+	events, logins := parseAll(strings.NewReader(log), now)
+	if len(events) != 1 || len(logins) != 3 {
+		t.Fatalf("events %d, logins %d", len(events), len(logins))
+	}
+	want := []Login{
+		{User: "aziz", IP: "92.63.204.12", Method: "publickey"},
+		{User: "root", IP: "10.0.0.5", Method: "password"},
+		{User: "deploy", IP: "2001:db8::1", Method: "keyboard-interactive/pam"},
+	}
+	for i, w := range want {
+		g := logins[i]
+		if g.User != w.User || g.IP != w.IP || g.Method != w.Method || g.Time.IsZero() {
+			t.Errorf("login %d = %+v, want %+v", i, g, w)
+		}
+	}
+	if logins[0].PasswordLike() || !logins[1].PasswordLike() || !logins[2].PasswordLike() {
+		t.Error("PasswordLike")
+	}
+	if got := loginsSince(logins, time.Unix(1761400002, 0)); len(got) != 2 || got[0].User != "deploy" {
+		t.Errorf("loginsSince = %+v, want newest first from root", got)
+	}
+}
+
+func TestParseSSHDConfig(t *testing.T) {
+	c := parseSSHDConfig("port 22\npermitrootlogin without-password\npasswordauthentication yes\npubkeyauthentication yes\n")
+	if !c.PasswordAuth || c.PermitRoot != "without-password" {
+		t.Errorf("got %+v", c)
+	}
+	if c := parseSSHDConfig("passwordauthentication no\npermitrootlogin no\n"); c.PasswordAuth || c.PermitRoot != "no" {
+		t.Errorf("got %+v", c)
 	}
 }

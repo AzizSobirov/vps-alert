@@ -1,5 +1,6 @@
-// Package sshwatch counts failed SSH logins from the system logs and alerts
-// when they cross a threshold, which usually means a brute force attack.
+// Package sshwatch reads SSH logins from the system logs: it alerts when
+// failed logins cross a threshold, which usually means a brute force attack,
+// and when someone logs in with a password instead of a key.
 package sshwatch
 
 import (
@@ -22,14 +23,18 @@ import (
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
+	"github.com/AzizSobirov/vps-alert/internal/knownips"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
 
 const (
-	checkEvery  = 5 * time.Minute
-	alertWindow = time.Hour
-	topN        = 5
+	checkEvery      = 5 * time.Minute
+	loginCheckEvery = time.Minute
+	alertWindow     = time.Hour
+	topN            = 5
+	// The known address list is seeded from this much log history.
+	seedPeriod = 30 * 24 * time.Hour
 	// When reading a log file directly, only its tail is parsed so a huge
 	// auth.log on a server under attack stays cheap.
 	maxTailBytes = 20 << 20
@@ -56,7 +61,21 @@ type Event struct {
 	Port string
 }
 
+// Login is one successful SSH login.
+type Login struct {
+	Time   time.Time
+	User   string
+	IP     string
+	Method string // publickey, password, keyboard-interactive/pam, ...
+}
+
+// PasswordLike reports whether the login used a password rather than a key.
+func (l Login) PasswordLike() bool {
+	return l.Method == "password" || strings.HasPrefix(l.Method, "keyboard-interactive")
+}
+
 var (
+	acceptedRe      = regexp.MustCompile(`^Accepted (\S+) for (.*?) from (\S+) port (\d+)`)
 	sshdRe          = regexp.MustCompile(`\bsshd(?:-session)?\[\d+\]: (.*)$`)
 	failedRe        = regexp.MustCompile(`^Failed \S+ for (invalid user )?(.*?) from (\S+) port (\d+)`)
 	invalidRe       = regexp.MustCompile(`^Invalid user (.*?) from (\S+)(?: port (\d+))?`)
@@ -96,6 +115,19 @@ func ParseLine(line string, now time.Time) (Event, bool) {
 	return ev, true
 }
 
+// ParseAccepted extracts a successful login from one log line.
+func ParseAccepted(line string, now time.Time) (Login, bool) {
+	m := sshdRe.FindStringSubmatch(line)
+	if m == nil {
+		return Login{}, false
+	}
+	f := acceptedRe.FindStringSubmatch(m[1])
+	if f == nil {
+		return Login{}, false
+	}
+	return Login{Time: parseTime(line, now), Method: f[1], User: f[2], IP: f[3]}, true
+}
+
 func parseTime(line string, now time.Time) time.Time {
 	if m := unixTimeRe.FindStringSubmatch(line); m != nil {
 		sec, _ := strconv.ParseInt(m[1], 10, 64)
@@ -130,11 +162,12 @@ type Count struct {
 	N   int
 }
 
-// Stats summarizes failed logins over a period.
+// Stats summarizes the logins over a period.
 type Stats struct {
-	Total int
-	IPs   []Count // most attempts first
-	Users []Count
+	Total  int     // failed logins
+	IPs    []Count // most attempts first
+	Users  []Count
+	Logins []Login // successful logins, newest first
 }
 
 // Aggregate counts the attempts at or after since. Events must be in log
@@ -188,37 +221,52 @@ func top(m map[string]int) []Count {
 	return out
 }
 
-// Summary counts failed SSH logins over the last period, from journald when
-// it has sshd entries and from the auth log file otherwise.
+// Summary counts failed SSH logins and lists the successful ones over the
+// last period, from journald when it has sshd entries and from the auth log
+// file otherwise.
 func Summary(ctx context.Context, period time.Duration) (Stats, error) {
 	now := time.Now()
 	since := now.Add(-period)
-	events, err := readEvents(ctx, since, now)
+	events, logins, err := readLogs(ctx, since, now)
 	if err != nil {
 		return Stats{}, err
 	}
-	return Aggregate(events, since), nil
+	st := Aggregate(events, since)
+	st.Logins = loginsSince(logins, since)
+	return st, nil
 }
 
-func readEvents(ctx context.Context, since, now time.Time) ([]Event, error) {
+// loginsSince returns the logins at or after since, newest first.
+func loginsSince(logins []Login, since time.Time) []Login {
+	var out []Login
+	for i := len(logins) - 1; i >= 0; i-- {
+		if logins[i].Time.IsZero() || !logins[i].Time.Before(since) {
+			out = append(out, logins[i])
+		}
+	}
+	return out
+}
+
+func readLogs(ctx context.Context, since, now time.Time) ([]Event, []Login, error) {
 	if journalHasSSHD(ctx) {
 		out, err := exec.CommandContext(ctx, "journalctl", "-t", "sshd", "-t", "sshd-session",
 			"--since=@"+strconv.FormatInt(since.Unix(), 10), "-o", "short-unix", "--no-pager", "-q").Output()
 		if err != nil {
-			return nil, fmt.Errorf("journalctl: %w", err)
+			return nil, nil, fmt.Errorf("journalctl: %w", err)
 		}
-		return parseAll(bytes.NewReader(out), now), nil
+		events, logins := parseAll(bytes.NewReader(out), now)
+		return events, logins, nil
 	}
 	for _, f := range logFiles {
-		events, err := readFileTail(f, now)
+		events, logins, err := readFileTail(f, now)
 		if err == nil {
-			return events, nil
+			return events, logins, nil
 		}
 		if !os.IsNotExist(err) {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return nil, nil // no source on this system, e.g. a development machine
+	return nil, nil, nil // no source on this system, e.g. a development machine
 }
 
 func journalHasSSHD(ctx context.Context) bool {
@@ -229,30 +277,69 @@ func journalHasSSHD(ctx context.Context) bool {
 	return err == nil && len(bytes.TrimSpace(out)) > 0
 }
 
-func readFileTail(path string, now time.Time) ([]Event, error) {
+func readFileTail(path string, now time.Time) ([]Event, []Login, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer f.Close()
 	if st, err := f.Stat(); err == nil && st.Size() > maxTailBytes {
 		if _, err := f.Seek(-maxTailBytes, io.SeekEnd); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return parseAll(f, now), nil
+	events, logins := parseAll(f, now)
+	return events, logins, nil
 }
 
-func parseAll(r io.Reader, now time.Time) []Event {
+func parseAll(r io.Reader, now time.Time) ([]Event, []Login) {
 	var events []Event
+	var logins []Login
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
 		if ev, ok := ParseLine(sc.Text(), now); ok {
 			events = append(events, ev)
+		} else if lg, ok := ParseAccepted(sc.Text(), now); ok {
+			logins = append(logins, lg)
 		}
 	}
-	return events
+	return events, logins
+}
+
+// SSHDConfig is the part of the effective sshd configuration that decides
+// how exposed the server is.
+type SSHDConfig struct {
+	PasswordAuth bool
+	// PermitRootLogin as sshd reports it: yes, prohibit-password (or its
+	// old name without-password), forced-commands-only or no.
+	PermitRoot string
+}
+
+// ReadSSHDConfig asks sshd for its effective configuration (sshd -T), which
+// includes defaults and drop-in files. It needs root.
+func ReadSSHDConfig(ctx context.Context) (SSHDConfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "sshd", "-T").Output()
+	if err != nil {
+		return SSHDConfig{}, fmt.Errorf("sshd -T: %w", err)
+	}
+	return parseSSHDConfig(string(out)), nil
+}
+
+func parseSSHDConfig(out string) SSHDConfig {
+	var c SSHDConfig
+	for _, line := range strings.Split(out, "\n") {
+		key, val, _ := strings.Cut(strings.TrimSpace(line), " ")
+		switch strings.ToLower(key) {
+		case "passwordauthentication":
+			c.PasswordAuth = val == "yes"
+		case "permitrootlogin":
+			c.PermitRoot = val
+		}
+	}
+	return c
 }
 
 // shouldAlert reports whether an alert is due: the threshold is on and
@@ -268,36 +355,119 @@ type Watcher struct {
 }
 
 type state struct {
-	LastAlert time.Time `json:"last_alert"`
+	LastAlert      time.Time `json:"last_alert"`
+	LastLoginCheck time.Time `json:"last_login_check"`
 }
 
 func (w *Watcher) statePath() string { return filepath.Join(w.Cfg.DataDir, "sshwatch.json") }
+
+func (w *Watcher) knownPath() string { return filepath.Join(w.Cfg.DataDir, knownips.FileName) }
 
 func (w *Watcher) Run(ctx context.Context) {
 	var st state
 	if data, err := os.ReadFile(w.statePath()); err == nil {
 		json.Unmarshal(data, &st)
 	}
-	t := time.NewTicker(checkEvery)
-	defer t.Stop()
+	w.seedKnownIPs(ctx)
+	if st.LastLoginCheck.IsZero() {
+		// Only logins from now on are checked, not the whole history.
+		st.LastLoginCheck = time.Now()
+		w.save(st)
+	}
+
+	failures := time.NewTicker(checkEvery)
+	defer failures.Stop()
+	logins := time.NewTicker(loginCheckEvery)
+	defer logins.Stop()
+	w.checkFailures(ctx, &st)
 	for {
-		if threshold := w.Store.Get().Security.FailedLoginThreshold; threshold > 0 {
-			stats, err := Summary(ctx, alertWindow)
-			now := time.Now()
-			if err != nil {
-				log.Printf("sshwatch: %v", err)
-			} else if shouldAlert(stats, threshold, st.LastAlert, now) {
-				st.LastAlert = now
-				w.save(st)
-				w.Notify.Send(ctx, w.message(stats))
-			}
-		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-failures.C:
+			w.checkFailures(ctx, &st)
+		case <-logins.C:
+			w.checkLogins(ctx, &st)
 		}
 	}
+}
+
+func (w *Watcher) checkFailures(ctx context.Context, st *state) {
+	threshold := w.Store.Get().Security.FailedLoginThreshold
+	if threshold <= 0 {
+		return
+	}
+	stats, err := Summary(ctx, alertWindow)
+	now := time.Now()
+	if err != nil {
+		log.Printf("sshwatch: %v", err)
+	} else if shouldAlert(stats, threshold, st.LastAlert, now) {
+		st.LastAlert = now
+		w.save(*st)
+		w.Notify.Send(ctx, w.message(stats))
+	}
+}
+
+// checkLogins looks at the logins since the last check: their addresses are
+// remembered as known, and password logins are reported.
+func (w *Watcher) checkLogins(ctx context.Context, st *state) {
+	now := time.Now()
+	_, logins, err := readLogs(ctx, st.LastLoginCheck, now)
+	if err != nil {
+		log.Printf("sshwatch: %v", err)
+		return
+	}
+	var fresh []Login
+	for _, lg := range logins {
+		if lg.Time.After(st.LastLoginCheck) {
+			fresh = append(fresh, lg)
+		}
+	}
+	st.LastLoginCheck = now
+	w.save(*st)
+
+	var addrs []string
+	for _, lg := range fresh {
+		addrs = append(addrs, lg.IP)
+	}
+	if err := knownips.Add(w.knownPath(), now, addrs...); err != nil {
+		log.Printf("sshwatch: %v", err)
+	}
+	if !w.Store.Get().Security.PasswordLoginAlert {
+		return
+	}
+	for _, lg := range fresh {
+		if lg.PasswordLike() {
+			w.Notify.Send(ctx, w.passwordMessage(lg))
+		}
+	}
+}
+
+// seedKnownIPs fills the known address list from the log history the first
+// time, so logins from your usual addresses are not all flagged as new.
+func (w *Watcher) seedKnownIPs(ctx context.Context) {
+	if _, exists := knownips.Load(w.knownPath()); exists {
+		return
+	}
+	now := time.Now()
+	_, logins, err := readLogs(ctx, now.Add(-seedPeriod), now)
+	if err != nil {
+		log.Printf("sshwatch: seeding known addresses: %v", err)
+	}
+	addrs := []string{}
+	for _, lg := range logins {
+		addrs = append(addrs, lg.IP)
+	}
+	// Written even when empty, so the PAM hook knows the list is in use.
+	if err := knownips.Add(w.knownPath(), now, append(addrs, "")...); err != nil {
+		log.Printf("sshwatch: %v", err)
+	}
+}
+
+func (w *Watcher) passwordMessage(lg Login) string {
+	l := i18n.Pick(w.Store.Get().Language, w.Cfg.Language)
+	return i18n.T(l, "ssh.password_alert", html.EscapeString(w.Cfg.ServerName), html.EscapeString(lg.User),
+		html.EscapeString(lg.IP), lg.Time.Format("15:04"), i18n.DocURL(l, "security.md"))
 }
 
 func (w *Watcher) save(st state) {

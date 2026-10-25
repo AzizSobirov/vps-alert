@@ -2,14 +2,30 @@ package i18n
 
 func init() {
 	register(EN, map[string]string{
-		"ssh.alert":         "🚨 <b>SSH brute force</b> on %s\n%s failed logins in the last hour",
-		"ssh.top_ips":       "Top IPs:",
-		"ssh.top_users":     "Usernames tried:",
-		"ssh.summary":       "🔐 <b>Failed SSH logins in the last 24 hours</b>: %s",
-		"ssh.unavailable":   "⚠️ Could not read the SSH logs: %s",
-		"ssh.state_on":      "🚨 Brute force alert: %d or more failed logins in an hour",
-		"ssh.state_off":     "🚨 Brute force alert: off",
-		"ssh.err.threshold": "The threshold must be between 1 and 100000.",
+		"ssh.ok_none":          "✅ <b>No successful SSH logins in the last 24 hours</b>",
+		"ssh.ok_title":         "✅ <b>Successful SSH logins in the last 24 hours</b>: %s",
+		"ssh.ok_more":          "… and %d more",
+		"ssh.method.key":       "key",
+		"ssh.method.password":  "password ⚠️",
+		"ssh.cfg_title":        "⚙️ <b>SSH settings</b>",
+		"ssh.cfg_password_on":  "Password login: allowed ⚠️",
+		"ssh.cfg_password_off": "Password login: off ✅",
+		"ssh.cfg_root_yes":     "Root login: allowed, also with a password ⚠️",
+		"ssh.cfg_root_key":     "Root login: with a key only",
+		"ssh.cfg_root_no":      "Root login: off ✅",
+		"ssh.cfg_unknown":      "⚙️ Could not read the SSH settings (sshd -T)",
+		"ssh.cfg_hint":         "How to allow keys only, safely: %s",
+		"ssh.password_alert":   "⚠️ <b>Password login</b> on %s\n👤 <b>%s</b> from <code>%s</code> at %s\n\nA password can be guessed; logging in with an SSH key is safer. How to switch: %s",
+		"ssh.state_pw_on":      "⚠️ Password login alert: on",
+		"ssh.state_pw_off":     "⚠️ Password login alert: off",
+		"ssh.alert":            "🚨 <b>SSH brute force</b> on %s\n%s failed logins in the last hour",
+		"ssh.top_ips":          "Top IPs:",
+		"ssh.top_users":        "Usernames tried:",
+		"ssh.summary":          "🔐 <b>Failed SSH logins in the last 24 hours</b>: %s",
+		"ssh.unavailable":      "⚠️ Could not read the SSH logs: %s",
+		"ssh.state_on":         "🚨 Brute force alert: %d or more failed logins in an hour",
+		"ssh.state_off":        "🚨 Brute force alert: off",
+		"ssh.err.threshold":    "The threshold must be between 1 and 100000.",
 
 		"files.alert":          "🛡 <b>Important files changed</b> on %s",
 		"files.created":        "➕ <code>%s</code> created",
@@ -41,12 +57,13 @@ func init() {
 		"help.ssh.short":   "Failed SSH logins",
 		"help.files.short": "Watch important files",
 		"help.ports.short": "Listening ports",
-		"help.ssh": "Counts failed SSH logins from the system logs. When they reach the threshold within an hour, an alert with the top IPs and usernames is sent, at most once an hour. /mute does not silence it.\n\n" +
-			"<b>Usage</b>\n<code>/ssh</code>: the last 24 hours\n<code>/ssh threshold &lt;number&gt;</code>\n<code>/ssh on</code> · <code>/ssh off</code>\n\n" +
+		"help.ssh": "Shows successful and failed SSH logins of the last 24 hours and whether password and root logins are allowed. Failed logins are counted from the system logs. When they reach the threshold within an hour, an alert with the top IPs and usernames is sent, at most once an hour. /mute does not silence it.\n\n" +
+			"<b>Usage</b>\n<code>/ssh</code>: the last 24 hours\n<code>/ssh threshold &lt;number&gt;</code>\n<code>/ssh on</code> · <code>/ssh off</code>\n<code>/ssh password on</code> · <code>/ssh password off</code>\n\n" +
 			"<b>Examples</b>\n" +
 			"<code>/ssh</code>: who tried to log in today\n" +
 			"<code>/ssh threshold 50</code>: alert at 50 failures per hour\n" +
-			"<code>/ssh off</code>: no brute force alerts",
+			"<code>/ssh off</code>: no brute force alerts\n" +
+			"<code>/ssh password off</code>: no alert when someone logs in with a password",
 		"help.files": "Alerts when security-relevant files change: users and groups, sudoers, SSH keys and config, cron jobs, systemd services. It shows who was added, which key appeared and which permissions changed. /mute does not silence it.\n\n" +
 			"<b>Usage</b>\n<code>/files</code>: status\n<code>/files on</code> · <code>/files off</code>\n\n" +
 			"<b>Examples</b>\n" +

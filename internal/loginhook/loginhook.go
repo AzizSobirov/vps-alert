@@ -11,11 +11,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
+	"github.com/AzizSobirov/vps-alert/internal/knownips"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
@@ -85,11 +87,28 @@ func Notify(cfg *config.Config, ev Event) error {
 	text := i18n.T(l, "login.alert",
 		html.EscapeString(cfg.ServerName), html.EscapeString(ev.User), html.EscapeString(from),
 		html.EscapeString(ev.Service), time.Now().Format("2006-01-02 15:04:05 MST"))
+	if ev.Host != "" && NewAddress(filepath.Join(cfg.DataDir, knownips.FileName), ev.Host, time.Now()) {
+		text = i18n.T(l, "login.new_ip") + "\n" + text
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_, err := telegram.New(cfg.BotToken).SendMessage(ctx, cfg.ChatID, text, nil)
 	return err
+}
+
+// NewAddress reports whether host has never logged in before, and records
+// it. Until the service has created the list (it seeds it from the logs on
+// first start) nothing is flagged, so a fresh install does not call every
+// address new.
+func NewAddress(path, host string, now time.Time) bool {
+	known, exists := knownips.Load(path)
+	if !exists {
+		return false
+	}
+	_, seen := known[host]
+	knownips.Add(path, now, host)
+	return !seen
 }
 
 // savedLanguage reads the language chosen with /lang. It only reads the

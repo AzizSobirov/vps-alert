@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"fmt"
 	"html"
 	"strconv"
 	"strings"
@@ -27,10 +28,15 @@ func init() {
 }
 
 func (b *Bot) sshState(l i18n.Lang) string {
-	if n := b.Store.Get().Security.FailedLoginThreshold; n > 0 {
-		return i18n.T(l, "ssh.state_on", n)
+	sec := b.Store.Get().Security
+	line := i18n.T(l, "ssh.state_off")
+	if sec.FailedLoginThreshold > 0 {
+		line = i18n.T(l, "ssh.state_on", sec.FailedLoginThreshold)
 	}
-	return i18n.T(l, "ssh.state_off")
+	if sec.PasswordLoginAlert {
+		return line + "\n" + i18n.T(l, "ssh.state_pw_on")
+	}
+	return line + "\n" + i18n.T(l, "ssh.state_pw_off")
 }
 
 func (b *Bot) sshCommand(ctx context.Context, l i18n.Lang, args []string) error {
@@ -38,6 +44,8 @@ func (b *Bot) sshCommand(ctx context.Context, l i18n.Lang, args []string) error 
 	case len(args) == 0:
 		b.reply(ctx, sshSummaryText(ctx, l)+"\n\n"+b.state(l, "ssh")+"\n\n"+commandHelp(l, "ssh"), nil)
 		return nil
+	case len(args) == 2 && args[0] == "password" && (args[1] == "on" || args[1] == "off"):
+		return b.saveSecurity(ctx, l, func(s *settings.Security) error { s.PasswordLoginAlert = args[1] == "on"; return nil })
 	case len(args) == 1 && (args[0] == "on" || args[0] == "off"):
 		return b.saveSecurity(ctx, l, func(s *settings.Security) error {
 			if args[0] == "off" {
@@ -58,14 +66,69 @@ func (b *Bot) sshCommand(ctx context.Context, l i18n.Lang, args []string) error 
 }
 
 // sshSummaryText describes failed SSH logins over the last 24 hours.
+// Successful logins listed in /ssh; the count covers all of them.
+const maxLoginLines = 10
+
 func sshSummaryText(ctx context.Context, l i18n.Lang) string {
 	st, err := sshwatch.Summary(ctx, 24*time.Hour)
 	if err != nil {
 		return i18n.T(l, "ssh.unavailable", html.EscapeString(err.Error()))
 	}
-	text := i18n.T(l, "ssh.summary", sshwatch.FormatCount(st.Total))
+	var t strings.Builder
+	if len(st.Logins) == 0 {
+		t.WriteString(i18n.T(l, "ssh.ok_none"))
+	} else {
+		t.WriteString(i18n.T(l, "ssh.ok_title", sshwatch.FormatCount(len(st.Logins))))
+		for i, lg := range st.Logins {
+			if i == maxLoginLines {
+				t.WriteString("\n  " + i18n.T(l, "ssh.ok_more", len(st.Logins)-maxLoginLines))
+				break
+			}
+			fmt.Fprintf(&t, "\n  <code>%s</code> · <code>%s</code> · %s · %s", html.EscapeString(lg.User),
+				html.EscapeString(lg.IP), loginMethod(l, lg), lg.Time.Format("15:04"))
+		}
+	}
+	t.WriteString("\n\n" + i18n.T(l, "ssh.summary", sshwatch.FormatCount(st.Total)))
 	if top := sshwatch.FormatTop(l, st); top != "" {
-		text += "\n" + top
+		t.WriteString("\n" + top)
+	}
+	t.WriteString("\n\n" + sshdConfigText(ctx, l))
+	return t.String()
+}
+
+func loginMethod(l i18n.Lang, lg sshwatch.Login) string {
+	switch {
+	case lg.Method == "publickey":
+		return i18n.T(l, "ssh.method.key")
+	case lg.PasswordLike():
+		return i18n.T(l, "ssh.method.password")
+	}
+	return html.EscapeString(lg.Method)
+}
+
+// sshdConfigText shows whether password and root logins are allowed.
+func sshdConfigText(ctx context.Context, l i18n.Lang) string {
+	c, err := sshwatch.ReadSSHDConfig(ctx)
+	if err != nil {
+		return i18n.T(l, "ssh.cfg_unknown")
+	}
+	text := i18n.T(l, "ssh.cfg_title") + "\n"
+	if c.PasswordAuth {
+		text += i18n.T(l, "ssh.cfg_password_on")
+	} else {
+		text += i18n.T(l, "ssh.cfg_password_off")
+	}
+	text += "\n"
+	switch c.PermitRoot {
+	case "yes":
+		text += i18n.T(l, "ssh.cfg_root_yes")
+	case "no":
+		text += i18n.T(l, "ssh.cfg_root_no")
+	default:
+		text += i18n.T(l, "ssh.cfg_root_key")
+	}
+	if c.PasswordAuth || c.PermitRoot == "yes" {
+		text += "\n" + i18n.T(l, "ssh.cfg_hint", i18n.DocURL(l, "security.md"))
 	}
 	return text
 }

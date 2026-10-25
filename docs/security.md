@@ -45,6 +45,54 @@ password login is off or passwords are strong. The alert is for unusual waves, n
 noise. If you see the same IPs again and again, consider [fail2ban](https://github.com/fail2ban/fail2ban)
 or allowing SSH only from your IPs.
 
+## Successful logins and SSH settings
+
+`/ssh` also lists the **successful** logins of the last 24 hours, with user, address, method and
+time, and shows whether sshd allows password and root logins:
+
+```
+✅ Successful SSH logins in the last 24 hours: 2
+  aziz · 92.63.204.12 · key · 14:02
+  root · 10.0.0.5 · password ⚠️ · 03:40
+
+⚙️ SSH settings
+Password login: allowed ⚠️
+Root login: allowed, also with a password ⚠️
+```
+
+The settings come from `sshd -T`, so they include defaults and files in `sshd_config.d/`.
+
+Two alerts go with this, and `/mute` silences neither:
+
+- **First login from a new address.** The usual 🔐 login message gets a 🆕 line when the address
+  has never logged in before. On first start vps-alert learns your usual addresses from the last 30
+  days of logs, so they are not flagged. The list is kept in `/var/lib/vps-alert/known-ips.json`.
+- **Password login.** When someone logs in with a password instead of a key, you get a ⚠️ alert
+  within a minute. Turn it off with `/ssh password off` if you use passwords on purpose.
+
+### Allowing keys only
+
+Thousands of bots try passwords every day. With password login off they cannot get in at all, and
+the failed login count drops to almost nothing.
+
+1. Make sure you can log in with an SSH key. On your computer: `ssh-copy-id user@your-server-ip`,
+   then `ssh user@your-server-ip` must log in without asking for a password.
+2. **Keep your current SSH session open**, so you can undo a mistake.
+3. On the server:
+
+   ```sh
+   printf "PasswordAuthentication no\nPermitRootLogin prohibit-password\n" | sudo tee /etc/ssh/sshd_config.d/10-keys-only.conf
+   sudo sshd -t && sudo systemctl restart ssh
+   ```
+
+   On RHEL-based systems the service is called `sshd`.
+4. In a **new** terminal, log in again. If it works, you are done; `/ssh` now shows both settings ✅.
+   If it does not, remove the file from the session that is still open and restart ssh.
+
+Some cloud images set `PasswordAuthentication yes` in a file such as
+`/etc/ssh/sshd_config.d/50-cloud-init.conf`. Files are read in name order and the first value wins,
+which is why the file above starts with `10-`.
+
 ## Important files
 
 These files are checked every minute:

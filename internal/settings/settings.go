@@ -38,6 +38,8 @@ type Security struct {
 	FailedLoginThreshold int  `json:"failed_login_threshold"`
 	FileWatch            bool `json:"file_watch"` // alert on changes to important files
 	PortWatch            bool `json:"port_watch"` // alert on newly opened listening ports
+	// Alert when someone logs in over SSH with a password instead of a key.
+	PasswordLoginAlert bool `json:"password_login_alert"`
 }
 
 type Alerts struct {
@@ -103,7 +105,7 @@ func Defaults() Settings {
 			ForecastDays: 7,
 		},
 		Report:   Report{Enabled: true, Time: "09:00"},
-		Security: Security{FailedLoginThreshold: 100, FileWatch: true, PortWatch: true},
+		Security: Security{FailedLoginThreshold: 100, FileWatch: true, PortWatch: true, PasswordLoginAlert: true},
 		Backup: Backup{
 			IntervalDays: 1,
 			Time:         "03:00",

@@ -2,6 +2,7 @@ package i18n
 
 func init() {
 	register(EN, map[string]string{
+		"menu.btn.tog_pwlogin":   "Password login alerts",
 		"menu.title":             "🖥 <b>%s</b>",
 		"menu.backup_never":      "💾 No backups yet",
 		"menu.backup_ok":         "💾 Last backup: ✅ %s",
