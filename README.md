@@ -12,6 +12,8 @@ One static binary, no open ports, no dashboard to host.
 - 🛡 **Locked to one chat**: the chat ID (and optionally user IDs) come from the env file only; everyone else is ignored and reported
 - 💓 **Dead man's switch**: optional heartbeat to healthchecks.io or Uptime Kuma, so a dead server still gets noticed
 
+📖 **[Documentation](docs/README.md)**: how alerts, backups, schedules, retention, databases and restores work.
+
 ## Installation
 
 This guide assumes an **Ubuntu 22.04+ or Debian 12+** server (Ubuntu 24.04 recommended) and that you
