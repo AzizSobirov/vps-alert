@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"net"
 	"strings"
 	"time"
 
@@ -28,6 +29,9 @@ type Monitor struct {
 	Interval    time.Duration
 	DefaultLang string // LANGUAGE from the env file; the /lang setting wins
 	DataDir     string // where the disk usage history for forecasts is kept
+	// LOGIN_IP_WHITELIST: logins from these networks count as trusted in the
+	// daily report.
+	EnvWhitelist []*net.IPNet
 
 	states     map[string]*state
 	history    *diskHistory
@@ -220,6 +224,9 @@ func (m *Monitor) maybeReport(ctx context.Context, snap metrics.Snapshot, now ti
 	}
 	if lines := m.forecastReport(snap, now, l); len(lines) > 0 {
 		b.WriteString("\n\n" + strings.Join(lines, "\n"))
+	}
+	if summary := m.dailySummary(ctx, l, now); summary != "" {
+		b.WriteString("\n\n" + summary)
 	}
 	m.Notify.Send(ctx, b.String())
 }

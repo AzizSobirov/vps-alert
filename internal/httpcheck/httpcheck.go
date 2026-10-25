@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/events"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
@@ -174,6 +175,7 @@ func (tr *tracker) update(l i18n.Lang, u string, r result, now time.Time) []stri
 		tr.fails++
 		if tr.fails >= failChecks && !tr.down {
 			tr.down = true
+			events.Add(events.SiteDown, 1)
 			msgs = append(msgs, i18n.T(l, "http.down", name, html.EscapeString(Problem(l, r.kind, r.reason))))
 		}
 		tr.slow, tr.slowSent = 0, false

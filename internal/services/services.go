@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/events"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/metrics"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
@@ -279,6 +280,7 @@ func (tr *tracker) update(l i18n.Lang, it Item, st State, now time.Time) []strin
 		tr.bad++
 		if tr.bad >= badChecks && !tr.down {
 			tr.down = true
+			events.Add(events.ServiceDown, 1)
 			status := html.EscapeString(StatusText(l, st.Status))
 			if it.Kind == Docker {
 				msgs = append(msgs, i18n.T(l, "services.down.docker", name, status, st.ExitCode))

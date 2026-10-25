@@ -12,6 +12,14 @@ curl -fsSL https://github.com/AzizSobirov/vps-alert/releases/latest/download/ins
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-26
+
+### Added
+- The daily report now summarizes the last 24 hours: SSH logins by user, trusted logins (such as a
+  CI deploy user) on their own line, failed attempts, password logins, a warning while password or
+  root password logins are allowed, services and websites that are down and how often they went
+  down, and file changes and new ports.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added
@@ -97,7 +105,8 @@ First release.
 - Optional heartbeat for healthchecks.io or Uptime Kuma.
 - An installer that verifies the downloaded binary's checksum.
 
-[Unreleased]: https://github.com/AzizSobirov/vps-alert/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/AzizSobirov/vps-alert/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.2.0...v0.3.0

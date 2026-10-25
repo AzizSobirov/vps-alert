@@ -17,6 +17,7 @@ import (
 	"github.com/AzizSobirov/vps-alert/internal/backup"
 	"github.com/AzizSobirov/vps-alert/internal/bot"
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/events"
 	"github.com/AzizSobirov/vps-alert/internal/filewatch"
 	"github.com/AzizSobirov/vps-alert/internal/httpcheck"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
@@ -126,6 +127,7 @@ func run(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
+	events.SetDir(cfg.DataDir)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -146,7 +148,7 @@ func run(cfg *config.Config) error {
 
 	tasks := []func(context.Context){
 		(&bot.Bot{Cfg: cfg, TG: tg, Store: store, Backup: backups}).Run,
-		(&monitor.Monitor{Server: cfg.ServerName, Store: store, Notify: notify, DefaultLang: cfg.Language, DataDir: cfg.DataDir}).Run,
+		(&monitor.Monitor{Server: cfg.ServerName, Store: store, Notify: notify, DefaultLang: cfg.Language, DataDir: cfg.DataDir, EnvWhitelist: cfg.LoginWhitelist}).Run,
 		backups.Schedule,
 		(&services.Watcher{Cfg: cfg, Store: store, Notify: notify}).Run,
 		(&httpcheck.Watcher{Cfg: cfg, Store: store, Notify: notify}).Run,

@@ -123,8 +123,35 @@ Failed login attempts (brute force) are covered in [security](security.md#failed
 
 ## Daily report
 
-Every day at 09:00 (server time) you get the current status plus the result of the last backup and
-the time of the next one.
+Every day at 09:00 (server time) you get a summary of the server and the last 24 hours:
+
+```
+📊 Daily report
+🖥 my-server
+🟢 CPU: 8% · 🟢 RAM: 61% · 🟡 Disk /: 78%
+💾 Last backup: ✅ 2026-10-26 03:00
+⏭ Next backup: 2026-10-27 03:00
+
+🔐 SSH, last 24 hours
+  ✅ Logins: 3: aziz ×2, root ×1
+  🤝 deploy: 14 times (trusted, silent)
+  🚫 Failed attempts: 1 163
+  ⚠️ Password login is allowed
+
+⚙️ Services: all 4 running
+🌐 Websites: 2/2 up
+🛡 Last 24h: no file changes or new ports
+```
+
+- **Status and backups**: the same as `/status`, the last and next backup, a stale backup warning
+  and disks expected to fill up within 30 days.
+- **SSH**: logins by user, trusted logins (such as a CI deploy user) on their own line, failed
+  attempts, password logins, and a warning while sshd allows password or root password logins.
+- **Services and websites**: what is down right now and how many times they went down during the
+  day. Shown only when you watch any.
+- **Security**: file changes and new ports during the day.
+
+A quiet day gives a short report; problems are marked ⚠️ or 🔴.
 
 ```
 /report 08:30     change the time

@@ -127,8 +127,36 @@ Muvaffaqiyatsiz kirish urinishlari (brute-force) [xavfsizlik](security.md) sahif
 
 ## Kunlik hisobot
 
-Har kuni soat 09:00 da (server vaqti bilan) joriy holat, oxirgi backup natijasi va keyingi backup
-vaqti keladi.
+Har kuni soat 09:00 da (server vaqti bilan) server va oxirgi 24 soat haqida xulosa keladi:
+
+```
+📊 Kunlik hisobot
+🖥 my-server
+🟢 CPU: 8% · 🟢 RAM: 61% · 🟡 Disk /: 78%
+💾 Oxirgi backup: ✅ 2026-10-26 03:00
+⏭ Keyingi backup: 2026-10-27 03:00
+
+🔐 SSH, oxirgi 24 soat
+  ✅ 3 ta kirish: aziz ×2, root ×1
+  🤝 deploy: 14 marta (ishonchli, ovozsiz)
+  🚫 1 163 ta muvaffaqiyatsiz urinish
+  ⚠️ Parol bilan kirish yoqiq
+
+⚙️ Servislar: 4 tasi ham ishlayapti
+🌐 Saytlar: 2/2 ishlayapti
+🛡 Oxirgi 24 soat: fayl o'zgarishi va yangi port yo'q
+```
+
+- **Holat va backuplar**: `/status` bilan bir xil, oxirgi va keyingi backup, eskirgan backup
+  ogohlantirishi va 30 kun ichida to'lishi kutilayotgan disklar.
+- **SSH**: foydalanuvchilar bo'yicha kirishlar, ishonchli kirishlar (masalan, CI deploy
+  foydalanuvchisi) alohida qatorda, muvaffaqiyatsiz urinishlar, parol bilan kirishlar va sshd parol
+  yoki root parol bilan kirishga ruxsat bersa, ogohlantirish.
+- **Servislar va saytlar**: hozir ishlamayotganlari va kun davomida necha marta to'xtagani.
+  Faqat ularni kuzatayotgan bo'lsangiz chiqadi.
+- **Xavfsizlik**: kun davomidagi fayl o'zgarishlari va yangi portlar.
+
+Muammosiz kunda hisobot qisqa bo'ladi, muammolar ⚠️ yoki 🔴 bilan belgilanadi.
 
 ```
 /report 08:30     vaqtni o'zgartirish

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
+	"github.com/AzizSobirov/vps-alert/internal/events"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
 	"github.com/AzizSobirov/vps-alert/internal/settings"
 	"github.com/AzizSobirov/vps-alert/internal/telegram"
@@ -411,6 +412,7 @@ func (w *Watcher) Run(ctx context.Context) {
 				b.Files, dirty = cur, true
 			} else if changes := Diff(b.Files, cur); len(changes) > 0 {
 				b.Files, b.LastChange, b.LastPath, dirty = cur, time.Now(), changes[0].Path, true
+				events.Add(events.FileChange, len(changes))
 				w.Notify.Send(ctx, i18n.T(l, "files.alert", html.EscapeString(w.Cfg.ServerName))+"\n\n"+FormatChanges(l, changes))
 			}
 		}
@@ -424,6 +426,7 @@ func (w *Watcher) Run(ctx context.Context) {
 				if ports.known == nil || !portsWasOn {
 					ports.reset(cur)
 				} else if opened := ports.update(cur); len(opened) > 0 {
+					events.Add(events.NewPort, len(opened))
 					w.Notify.Send(ctx, i18n.T(l, "ports.alert", html.EscapeString(w.Cfg.ServerName))+"\n\n"+FormatPorts(l, opened, nil))
 				}
 				if !samePorts(b.Ports, ports.known) {
