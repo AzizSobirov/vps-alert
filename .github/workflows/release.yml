@@ -1,5 +1,6 @@
 # Builds the Linux binaries and publishes a GitHub release when a version
 # tag is pushed:  git tag v0.1.0 && git push origin v0.1.0
+# The release notes are that version's section of CHANGELOG.md.
 name: release
 
 on:
@@ -14,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Fails early if CHANGELOG.md has no section for this tag.
+      - name: Release notes
+        run: sh .github/scripts/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -25,4 +29,4 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* deploy/install.sh --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" dist/* deploy/install.sh --title "$GITHUB_REF_NAME" --notes-file release-notes.md

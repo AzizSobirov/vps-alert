@@ -20,6 +20,8 @@ One static binary, no open ports, no dashboard to host.
 
 🇺🇿 **[Hujjatlar o'zbek tilida](docs/uz/README.md)** · 🇷🇺 **[Документация на русском](docs/ru/README.md)**
 
+📝 **[Changelog](CHANGELOG.md)**: what changed in each version.
+
 ## Installation
 
 This guide assumes an **Ubuntu 22.04+ or Debian 12+** server (Ubuntu 24.04 recommended) and that you
@@ -339,13 +341,18 @@ make release   # dist/vps-alert-linux-amd64, dist/vps-alert-linux-arm64
 
 ### Releasing
 
-Push a version tag. GitHub Actions runs the tests, builds both binaries and publishes them with
-`checksums.txt` and `install.sh` as a GitHub release:
+1. Move the entries under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) into a new version
+   section, e.g. `## [0.5.0] - 2026-11-02`, and update the links at the bottom.
+2. Commit, then push a tag with the same version:
 
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
+   ```sh
+   git tag v0.5.0
+   git push origin v0.5.0
+   ```
+
+GitHub Actions checks that CHANGELOG.md has a section for the tag, runs the tests, builds both
+binaries and publishes them with `checksums.txt` and `install.sh` as a GitHub release, using that
+section as the release notes.
 
 ## License
 
