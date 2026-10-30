@@ -158,6 +158,8 @@ then apply with `sudo systemctl restart vps-alert`. See [`.env.example`](.env.ex
 
 - **Cloudflare R2**: keep a copy of the backups outside the server (strongly recommended, see below).
 - **`LOGIN_IP_WHITELIST`**: your own IPs, so your logins don't trigger alerts.
+- **`ALERT_CHAT_ID`**: send alerts to another chat, such as a channel, and keep commands in
+  `ALLOWED_CHAT_ID` ([details](docs/telegram.md#alerts-in-a-channel)).
 - **`HEARTBEAT_URL`**: a [healthchecks.io](https://healthchecks.io) check URL, so you are alerted
   even when the server is completely down.
 
@@ -320,6 +322,8 @@ restic restore latest --target /tmp/restore
 - Commands are accepted only from `ALLOWED_CHAT_ID`, and if `ALLOWED_USER_IDS` is set, only from
   those users. Anything else is dropped, the bot leaves foreign groups, and the attempt is
   reported to the allowed chat.
+- `ALERT_CHAT_ID`, if set, only receives alerts. Commands there are ignored, and the buttons under
+  alerts work only for `ALLOWED_USER_IDS`, since a channel may have many readers.
 - There is no command that runs arbitrary shell code, and restores can only be started from a shell
   on the server.
 - Commands queued while the agent was offline for more than 5 minutes are discarded.

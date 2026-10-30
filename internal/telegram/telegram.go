@@ -235,7 +235,7 @@ func (c *Client) SetMyCommands(ctx context.Context, cmds []BotCommand) error {
 	return c.call(ctx, "setMyCommands", map[string]any{"commands": cmds}, nil)
 }
 
-// Notifier sends messages to the single allowed chat.
+// Notifier sends alerts to the alert chat (ALERT_CHAT_ID, else ALLOWED_CHAT_ID).
 type Notifier struct {
 	TG     *Client
 	ChatID int64

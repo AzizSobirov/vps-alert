@@ -1,12 +1,14 @@
 package bot
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/AzizSobirov/vps-alert/internal/config"
 	"github.com/AzizSobirov/vps-alert/internal/i18n"
+	"github.com/AzizSobirov/vps-alert/internal/telegram"
 )
 
 func TestParseCommand(t *testing.T) {
@@ -77,5 +79,49 @@ func TestUsageErrorIsTranslated(t *testing.T) {
 	}
 	if got := i18n.Text(i18n.UZ, err); got != i18n.T(i18n.UZ, "bot.err.days") {
 		t.Errorf("Text = %q", got)
+	}
+}
+
+func TestButtonAllowedInAlertChat(t *testing.T) {
+	b := &Bot{Cfg: &config.Config{ChatID: -100, AlertChatID: -200, UserIDs: map[int64]bool{7: true}}}
+	if !b.buttonAllowed(-200, 7, "trust:1.2.3.4") {
+		t.Error("allowed user's alert button in the alert chat rejected")
+	}
+	if b.buttonAllowed(-200, 8, "trust:1.2.3.4") {
+		t.Error("a channel reader outside ALLOWED_USER_IDS accepted")
+	}
+	if b.buttonAllowed(-200, 7, "m:main") {
+		t.Error("menu button accepted in the alert chat")
+	}
+	if b.buttonAllowed(-300, 7, "trust:1.2.3.4") {
+		t.Error("button in a foreign chat accepted")
+	}
+
+	// No ALLOWED_USER_IDS: only the owner of the private control chat.
+	private := &Bot{Cfg: &config.Config{ChatID: 7, AlertChatID: -200, UserIDs: map[int64]bool{}}}
+	if !private.buttonAllowed(-200, 7, "trust:1.2.3.4") || private.buttonAllowed(-200, 8, "trust:1.2.3.4") {
+		t.Error("alert chat buttons not limited to the private chat owner")
+	}
+	group := &Bot{Cfg: &config.Config{ChatID: -100, AlertChatID: -200, UserIDs: map[int64]bool{}}}
+	if group.buttonAllowed(-200, 8, "trust:1.2.3.4") {
+		t.Error("anyone accepted in the alert chat without ALLOWED_USER_IDS")
+	}
+}
+
+func TestAlertChatIsNotLeft(t *testing.T) {
+	b, api := newMenuBot(t)
+	b.Cfg.AlertChatID = -1009
+	ctx := context.Background()
+
+	added := &telegram.ChatMemberUpdated{Chat: telegram.Chat{ID: -1009, Type: "channel"}, From: telegram.User{ID: 7}}
+	added.NewChatMember.Status = "administrator"
+	b.handle(ctx, telegram.Update{MyChatMember: added})
+
+	cmd := update("/status", 0, 7)
+	cmd.Message.Chat.ID = -1009
+	b.handle(ctx, cmd)
+
+	if calls := api.all(); calls != "" {
+		t.Errorf("bot reacted in the alert chat:\n%s", calls)
 	}
 }

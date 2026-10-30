@@ -7,7 +7,7 @@ how each part works in more detail.
 
 | Page | What it covers |
 |---|---|
-| [Telegram setup](telegram.md) | Private chat or group, chat and user IDs, several servers |
+| [Telegram setup](telegram.md) | Private chat or group, alerts in a channel, chat and user IDs, several servers |
 | [Alerts and reports](alerts.md) | Resource thresholds, login alerts, daily report, muting |
 | [How backups work](backups.md) | What happens during a backup, local and R2, encryption |
 | [Schedule and retention](schedule-and-retention.md) | When backups run and how many are kept |

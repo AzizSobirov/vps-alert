@@ -80,7 +80,7 @@ func Notify(cfg *config.Config, ev Event) error {
 	text, kb, silent := Message(cfg, savedSettings(cfg.SettingsPath()), ev, time.Now())
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	_, err := telegram.New(cfg.BotToken).SendMessageOpts(ctx, cfg.ChatID, text, kb, silent)
+	_, err := telegram.New(cfg.BotToken).SendMessageOpts(ctx, cfg.AlertChatID, text, kb, silent)
 	return err
 }
 

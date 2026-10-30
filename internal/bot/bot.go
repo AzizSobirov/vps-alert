@@ -1,5 +1,6 @@
-// Package bot handles Telegram commands. It only ever talks to the single
-// chat configured in the env file and ignores everything else.
+// Package bot handles Telegram commands. It only takes commands from the
+// chat configured in the env file, plus the buttons under alerts in the alert
+// chat, and ignores everything else.
 package bot
 
 import (
@@ -70,6 +71,10 @@ var helpGroups = []string{"monitor", "security", "backup", "bot"}
 // callbackHandlers handle inline buttons whose data is "<action>:<arg>" for
 // actions registered with registerCallback.
 var callbackHandlers = map[string]func(b *Bot, ctx context.Context, l i18n.Lang, q *telegram.CallbackQuery, arg string){}
+
+// alertCallbacks are the buttons sent under alerts, the only ones that work
+// in ALERT_CHAT_ID. Menu buttons edit messages in ALLOWED_CHAT_ID.
+var alertCallbacks = map[string]bool{"trust": true}
 
 // registerCommand adds a command from its own file, so features do not all
 // have to edit this one. Call it from init.
@@ -200,12 +205,13 @@ func (b *Bot) handle(ctx context.Context, u telegram.Update) {
 	case u.MyChatMember != nil:
 		// Leaving a chat produces an update too; only react to being added.
 		m := u.MyChatMember
-		if status := m.NewChatMember.Status; m.Chat.ID != b.Cfg.ChatID && status != "left" && status != "kicked" {
+		if status := m.NewChatMember.Status; !b.ownChat(m.Chat.ID) && status != "left" && status != "kicked" {
 			b.reject(ctx, m.Chat, m.From, i18n.T(b.language(), "bot.unauthorized.added"))
 		}
 	case u.Message != nil:
 		m := u.Message
-		if m.From == nil {
+		// The alert chat only receives; commands there are not taken.
+		if m.From == nil || (m.Chat.ID != b.Cfg.ChatID && m.Chat.ID == b.Cfg.AlertChatID) {
 			return
 		}
 		// An answer to a menu question may itself start with "/", like a
@@ -232,7 +238,7 @@ func (b *Bot) handle(ctx context.Context, u telegram.Update) {
 		b.command(ctx, m.From, cmd, args)
 	case u.CallbackQuery != nil:
 		q := u.CallbackQuery
-		if q.Message == nil || !b.allowed(q.Message.Chat.ID, q.From.ID) {
+		if q.Message == nil || !b.buttonAllowed(q.Message.Chat.ID, q.From.ID, q.Data) {
 			b.TG.AnswerCallback(ctx, q.ID, i18n.T(b.language(), "bot.not_allowed"))
 			if q.Message != nil {
 				b.reject(ctx, q.Message.Chat, q.From, "button "+q.Data)
@@ -251,11 +257,33 @@ func (b *Bot) allowed(chatID, userID int64) bool {
 	return len(b.Cfg.UserIDs) == 0 || b.Cfg.UserIDs[userID]
 }
 
+// buttonAllowed also takes alert buttons pressed in ALERT_CHAT_ID. That can be
+// a channel anyone may read, so there only ALLOWED_USER_IDS count, or with
+// none set, the owner of a private ALLOWED_CHAT_ID.
+func (b *Bot) buttonAllowed(chatID, userID int64, data string) bool {
+	if chatID == b.Cfg.ChatID {
+		return b.allowed(chatID, userID)
+	}
+	action, _, _ := strings.Cut(data, ":")
+	if chatID != b.Cfg.AlertChatID || !alertCallbacks[action] {
+		return false
+	}
+	if len(b.Cfg.UserIDs) > 0 {
+		return b.Cfg.UserIDs[userID]
+	}
+	return userID == b.Cfg.ChatID
+}
+
+// ownChat reports whether the bot belongs in chatID.
+func (b *Bot) ownChat(chatID int64) bool {
+	return chatID == b.Cfg.ChatID || chatID == b.Cfg.AlertChatID
+}
+
 // reject leaves foreign group chats and tells the owner about the attempt,
 // at most once per user per hour.
 func (b *Bot) reject(ctx context.Context, chat telegram.Chat, from telegram.User, what string) {
 	log.Printf("security: rejected user=%d (@%s) chat=%d: %q", from.ID, from.Username, chat.ID, what)
-	if chat.ID != b.Cfg.ChatID && chat.Type != "private" {
+	if !b.ownChat(chat.ID) && chat.Type != "private" {
 		if err := b.TG.LeaveChat(ctx, chat.ID); err != nil {
 			log.Printf("bot: leaveChat %d: %v", chat.ID, err)
 		}
@@ -978,7 +1006,11 @@ func helpList(l i18n.Lang) string {
 }
 
 func (b *Bot) reply(ctx context.Context, text string, kb *telegram.Keyboard) {
-	if _, err := b.TG.SendMessage(ctx, b.Cfg.ChatID, text, kb); err != nil {
+	b.send(ctx, b.Cfg.ChatID, text, kb)
+}
+
+func (b *Bot) send(ctx context.Context, chatID int64, text string, kb *telegram.Keyboard) {
+	if _, err := b.TG.SendMessage(ctx, chatID, text, kb); err != nil {
 		log.Printf("bot: send: %v", err)
 	}
 }

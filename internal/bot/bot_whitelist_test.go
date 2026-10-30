@@ -59,3 +59,19 @@ func TestWhitelistCommand(t *testing.T) {
 		t.Errorf("state: %s", st)
 	}
 }
+
+func TestTrustButtonInAlertChat(t *testing.T) {
+	b, api := newMenuBot(t)
+	b.Cfg.AlertChatID = -1009
+	b.handle(context.Background(), telegram.Update{CallbackQuery: &telegram.CallbackQuery{ID: "q",
+		From: telegram.User{ID: 7, Username: "aziz"}, Message: &telegram.Message{MessageID: 42, Chat: telegram.Chat{ID: -1009, Type: "channel"}},
+		Data: "trust:92.63.204.12"}})
+
+	if wl := b.Store.Get().Security.LoginWhitelist; len(wl) != 1 {
+		t.Fatalf("whitelist = %v", wl)
+	}
+	calls := api.all()
+	if !strings.Contains(calls, `"chat_id":-1009`) || strings.Contains(calls, "leaveChat") {
+		t.Errorf("not answered in the alert chat, or left it:\n%s", calls)
+	}
+}

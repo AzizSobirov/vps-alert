@@ -27,8 +27,10 @@ func init() {
 			return
 		}
 		b.TG.AnswerCallback(ctx, q.ID, i18n.T(l, "bot.saved"))
-		b.TG.EditReplyMarkup(ctx, b.Cfg.ChatID, q.Message.MessageID, nil)
-		b.reply(ctx, i18n.T(l, "whitelist.trusted_by", html.EscapeString(entry), html.EscapeString(displayName(q.From))), nil)
+		// The alert may be in ALERT_CHAT_ID; answer where it was.
+		chat := q.Message.Chat.ID
+		b.TG.EditReplyMarkup(ctx, chat, q.Message.MessageID, nil)
+		b.send(ctx, chat, i18n.T(l, "whitelist.trusted_by", html.EscapeString(entry), html.EscapeString(displayName(q.From))), nil)
 	})
 }
 

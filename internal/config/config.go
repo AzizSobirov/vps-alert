@@ -16,12 +16,13 @@ import (
 )
 
 type Config struct {
-	BotToken   string
-	ChatID     int64
-	UserIDs    map[int64]bool // empty means every member of ChatID is trusted
-	ServerName string
-	DataDir    string
-	Language   string // default bot language; /lang overrides it
+	BotToken    string
+	ChatID      int64
+	AlertChatID int64          // where alerts go, ChatID unless ALERT_CHAT_ID is set
+	UserIDs     map[int64]bool // empty means every member of ChatID is trusted
+	ServerName  string
+	DataDir     string
+	Language    string // default bot language; /lang overrides it
 
 	ResticBin      string
 	ResticPassword string
@@ -79,6 +80,16 @@ func Load() (*Config, error) {
 		errs = append(errs, fmt.Errorf("ALLOWED_CHAT_ID: %w", err))
 	} else {
 		c.ChatID = id
+	}
+
+	c.AlertChatID = c.ChatID
+	if alert := os.Getenv("ALERT_CHAT_ID"); alert != "" {
+		id, err := strconv.ParseInt(alert, 10, 64)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("ALERT_CHAT_ID: %w", err))
+		} else {
+			c.AlertChatID = id
+		}
 	}
 
 	for _, s := range splitList(os.Getenv("ALLOWED_USER_IDS")) {

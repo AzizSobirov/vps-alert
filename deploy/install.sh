@@ -68,6 +68,7 @@ if [ ! -f "$ENV_FILE" ]; then
 	cat > "$ENV_FILE" <<CONF
 BOT_TOKEN=$token
 ALLOWED_CHAT_ID=$chat
+ALERT_CHAT_ID=
 ALLOWED_USER_IDS=$users
 SERVER_NAME=$(hostname)
 LANGUAGE=$lang

@@ -1,7 +1,9 @@
 # Telegram sozlash
 
-vps-alert faqat **bitta chat** bilan ishlaydi. U `/etc/vps-alert/vps-alert.env` faylidagi
-`ALLOWED_CHAT_ID` bilan belgilanadi va shaxsiy chat ham, guruh ham bo'lishi mumkin.
+vps-alert buyruqlarni faqat **bitta chat** dan qabul qiladi. U `/etc/vps-alert/vps-alert.env`
+faylidagi `ALLOWED_CHAT_ID` bilan belgilanadi va shaxsiy chat ham, guruh ham bo'lishi mumkin.
+Alertlar shu chatga yoki boshqa chatga, masalan kanalga boradi, qarang:
+[Alertlar kanalda](#alertlar-kanalda).
 
 ## Shaxsiy chat yoki guruh
 
@@ -52,6 +54,36 @@ botga yuborish uchun uning username'ini qo'shing:
 ```
 
 Oddiy `/status` ga guruhdagi barcha botlar javob beradi.
+
+## Alertlar kanalda
+
+Telegram kanalida buyruqlar ishlamaydi: kanal postida yozgan odam ko'rsatilmaydi, shuning uchun bot
+kim yozganini tekshira olmaydi. Alertlarni kanalga yuborish uchun `ALERT_CHAT_ID` ni bering,
+buyruqlar uchun esa `ALLOWED_CHAT_ID` da shaxsiy chat yoki guruh qolsin:
+
+```sh
+sudo nano /etc/vps-alert/vps-alert.env
+#   ALLOWED_CHAT_ID=123456789          # buyruqlar va ularning javoblari
+#   ALERT_CHAT_ID=-1001234567890       # alertlar
+#   ALLOWED_USER_IDS=123456789
+sudo vps-alert test                    # ikkala chatga test xabar yuboradi
+sudo systemctl restart vps-alert
+```
+
+1. Botni kanalga **Post messages** huquqi bilan administrator qilib qo'shing.
+2. Kanal ID'sini bilish uchun kanaldagi postni [@userinfobot](https://t.me/userinfobot) ga forward
+   qiling yoki kanalga post yozib, guruhdagi kabi `getUpdates` dan `"chat":{"id":-100...` ni toping.
+
+Nima qayerga boradi:
+
+| `ALERT_CHAT_ID` | `ALLOWED_CHAT_ID` |
+|---|---|
+| Alertlar, login alertlari, kunlik hisobot, backup va tiklash natijalari, "ishga tushdi" xabari | Buyruqlarga javoblar, menyu, ruxsatsiz urinishlar haqida xabarlar |
+
+Login alerti ostidagi **✅ Bu men, IP'ni ishonchli qilish** tugmasi kanalda ham ishlaydi, lekin faqat
+`ALLOWED_USER_IDS` dagi foydalanuvchilar uchun (u bo'sh bo'lsa, shaxsiy `ALLOWED_CHAT_ID` egasi
+uchun), chunki kanalni istalgan odam o'qishi mumkin. Alert chatida yozilgan buyruqlar e'tiborsiz
+qoldiriladi. Hammasini `ALLOWED_CHAT_ID` ga yuborish uchun `ALERT_CHAT_ID` ni bo'sh qoldiring.
 
 ## Shaxsiy chat va guruh o'rtasida almashtirish
 

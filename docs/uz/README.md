@@ -7,7 +7,7 @@ sahifalarda har bir qism qanday ishlashi batafsil tushuntirilgan.
 
 | Sahifa | Mazmuni |
 |---|---|
-| [Telegram sozlash](telegram.md) | Shaxsiy chat yoki guruh, chat va user ID, bir nechta server |
+| [Telegram sozlash](telegram.md) | Shaxsiy chat yoki guruh, alertlar kanalda, chat va user ID, bir nechta server |
 | [Alertlar va hisobotlar](alerts.md) | Resurs chegaralari, login alertlari, kunlik hisobot, alertlarni o'chirib turish |
 | [Backup qanday ishlaydi](backups.md) | Backup jarayoni, local va R2, shifrlash |
 | [Jadval va retention](schedule-and-retention.md) | Backup qachon olinadi va nechtasi saqlanadi |

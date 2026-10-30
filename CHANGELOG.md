@@ -12,6 +12,13 @@ curl -fsSL https://github.com/AzizSobirov/vps-alert/releases/latest/download/ins
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-30
+
+### Added
+- `ALERT_CHAT_ID` sends alerts to another chat, such as a Telegram channel, while commands stay in
+  `ALLOWED_CHAT_ID`. The **✅ It was me** button works there for `ALLOWED_USER_IDS` only.
+  `vps-alert test` sends a test message to both chats.
+
 ## [0.6.0] - 2026-10-26
 
 ### Added
@@ -105,7 +112,8 @@ First release.
 - Optional heartbeat for healthchecks.io or Uptime Kuma.
 - An installer that verifies the downloaded binary's checksum.
 
-[Unreleased]: https://github.com/AzizSobirov/vps-alert/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/AzizSobirov/vps-alert/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AzizSobirov/vps-alert/compare/v0.3.0...v0.4.0

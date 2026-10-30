@@ -91,16 +91,23 @@ func main() {
 			log.Fatal(err)
 		}
 		bm := &backup.Manager{Cfg: cfg, Store: store}
-		if err := restore.Run(ctx, bm, &telegram.Notifier{TG: telegram.New(cfg.BotToken), ChatID: cfg.ChatID}); err != nil {
+		if err := restore.Run(ctx, bm, &telegram.Notifier{TG: telegram.New(cfg.BotToken), ChatID: cfg.AlertChatID}); err != nil {
 			log.Fatal(err)
 		}
 	case "test":
-		_, err := telegram.New(cfg.BotToken).SendMessage(context.Background(), cfg.ChatID,
-			i18n.T(i18n.Pick(cfg.Language), "main.test", html.EscapeString(cfg.ServerName)), nil)
-		if err != nil {
-			log.Fatal(err)
+		chats := []int64{cfg.ChatID}
+		if cfg.AlertChatID != cfg.ChatID {
+			chats = append(chats, cfg.AlertChatID)
 		}
-		fmt.Println("Test message sent.")
+		tg := telegram.New(cfg.BotToken)
+		for _, chat := range chats {
+			_, err := tg.SendMessage(context.Background(), chat,
+				i18n.T(i18n.Pick(cfg.Language), "main.test", html.EscapeString(cfg.ServerName)), nil)
+			if err != nil {
+				log.Fatalf("chat %d: %v", chat, err)
+			}
+			fmt.Printf("Test message sent to %d.\n", chat)
+		}
 	default:
 		flag.Usage()
 		os.Exit(2)
@@ -133,7 +140,7 @@ func run(cfg *config.Config) error {
 	defer stop()
 
 	tg := telegram.New(cfg.BotToken)
-	notify := &telegram.Notifier{TG: tg, ChatID: cfg.ChatID}
+	notify := &telegram.Notifier{TG: tg, ChatID: cfg.AlertChatID}
 	backups := &backup.Manager{Cfg: cfg, Store: store, Notify: notify}
 
 	if len(cfg.UserIDs) == 0 && cfg.ChatID < 0 {

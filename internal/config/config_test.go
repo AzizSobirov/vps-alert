@@ -47,3 +47,26 @@ func TestParseIPList(t *testing.T) {
 		t.Error("expected error")
 	}
 }
+
+func TestAlertChatID(t *testing.T) {
+	t.Setenv("BOT_TOKEN", "token")
+	t.Setenv("ALLOWED_CHAT_ID", "123")
+	t.Setenv("ALERT_CHAT_ID", "")
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AlertChatID != 123 {
+		t.Errorf("AlertChatID = %d, want ALLOWED_CHAT_ID", c.AlertChatID)
+	}
+
+	t.Setenv("ALERT_CHAT_ID", "-1001234567890")
+	if c, err = Load(); err != nil || c.AlertChatID != -1001234567890 || c.ChatID != 123 {
+		t.Errorf("ALERT_CHAT_ID not used: %+v, %v", c, err)
+	}
+
+	t.Setenv("ALERT_CHAT_ID", "@channel")
+	if _, err := Load(); err == nil {
+		t.Error("invalid ALERT_CHAT_ID accepted")
+	}
+}

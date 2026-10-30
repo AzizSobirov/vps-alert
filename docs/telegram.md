@@ -1,7 +1,8 @@
 # Telegram setup
 
-vps-alert talks to exactly **one chat**, set by `ALLOWED_CHAT_ID` in `/etc/vps-alert/vps-alert.env`.
-That chat can be a private chat with you or a group.
+vps-alert takes commands from exactly **one chat**, set by `ALLOWED_CHAT_ID` in
+`/etc/vps-alert/vps-alert.env`. That chat can be a private chat with you or a group. Alerts go to the
+same chat, or to another one such as a channel, see [Alerts in a channel](#alerts-in-a-channel).
 
 ## Private chat or group
 
@@ -48,6 +49,37 @@ land in one place. To address one bot in a group with several, add its username 
 ```
 
 A plain `/status` is answered by every bot in the group.
+
+## Alerts in a channel
+
+Commands do not work in a Telegram channel: channel posts carry no sender, so the bot cannot check
+who wrote them. To have alerts in a channel, send them there with `ALERT_CHAT_ID` and keep
+`ALLOWED_CHAT_ID` for commands, a private chat or a group:
+
+```sh
+sudo nano /etc/vps-alert/vps-alert.env
+#   ALLOWED_CHAT_ID=123456789          # commands and their answers
+#   ALERT_CHAT_ID=-1001234567890       # alerts
+#   ALLOWED_USER_IDS=123456789
+sudo vps-alert test                    # sends a test message to both chats
+sudo systemctl restart vps-alert
+```
+
+1. Add the bot to the channel as an administrator with **Post messages**.
+2. To find the channel ID, forward a post from the channel to
+   [@userinfobot](https://t.me/userinfobot), or post in the channel and look for `"chat":{"id":-100...`
+   in `getUpdates` as for a group.
+
+What goes where:
+
+| `ALERT_CHAT_ID` | `ALLOWED_CHAT_ID` |
+|---|---|
+| Alerts, login alerts, the daily report, backup and restore results, the "started" message | Answers to commands, the menu, unauthorized access reports |
+
+The **✅ It was me, trust this IP** button under a login alert works in the channel, but only for the
+users in `ALLOWED_USER_IDS` (or, if it is empty, the owner of a private `ALLOWED_CHAT_ID`), since
+anyone can read a channel. Commands sent in the alert chat are ignored. Leave `ALERT_CHAT_ID` empty
+to send everything to `ALLOWED_CHAT_ID`.
 
 ## Switching between private chat and group
 
